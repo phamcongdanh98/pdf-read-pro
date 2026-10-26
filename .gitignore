@@ -1,0 +1,15 @@
+# build / đóng gói
+build/
+dist/
+*.spec
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+# nhật ký phiên làm việc cục bộ
+.claude/
+# dữ liệu tạm / bí mật
+*.log
+.env
+*.partial
