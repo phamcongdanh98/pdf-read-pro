@@ -12,11 +12,14 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFileDialog, QGroupBox, QHBoxLayout, QHeaderView,
                                QLabel, QLineEdit, QMessageBox, QProgressBar, QPushButton, QRadioButton, QSpinBox,
-                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+                               QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..core import activity, compressor as C
 from ..core.models import FileInfo
 from .common import fmt, fmt_size
+from .preview import PreviewPane
+
+DEFAULT_LIMIT_KB = 250     # mặc định 250 KB/trang (chữ scan 300 dpi vẫn rõ – xem README)
 
 STATUS_COLOR = {C.ST_COMPRESSED: "#15803D", C.ST_OK_ALREADY: "#15803D", C.ST_PARTIAL: "#B45309",
                 C.ST_NO_IMAGE: "#B45309", C.ST_NO_GAIN: "#B45309", C.ST_ERROR: "#DC2626",
@@ -70,8 +73,15 @@ class CompressPanel(QWidget):
         self.memory: Dict[str, Tuple[str, C.Result]] = {}   # path → (mode, kết quả) giữ lại sau khi quét lại
         self.release_cb: Callable[[], None] = lambda: None
 
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(10, 10, 10, 8)
+        # bố cục như Tổng quan: bên trái thiết lập + bảng, bên phải khung xem trước cao hết tab
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(10, 10, 10, 8)
+        split = QSplitter(Qt.Horizontal)
+        outer.addWidget(split)
+        left = QWidget()
+        lay = QVBoxLayout(left)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(8)
 
         cfg = QGroupBox("Thiết lập nén")
         cl = QVBoxLayout(cfg)
@@ -79,21 +89,26 @@ class CompressPanel(QWidget):
         row.addWidget(QLabel("Dung lượng tối đa mỗi trang:"))
         self.sp = QSpinBox()
         self.sp.setRange(20, 20000)
-        self.sp.setValue(200)
+        self.sp.setValue(DEFAULT_LIMIT_KB)          # lần sau mở app: giá trị đã chọn được nạp lại (ui/persist.py)
         self.sp.setSuffix(" KB")
         self.sp.setMinimumWidth(110)
         row.addWidget(self.sp)
         row.addSpacing(16)
-        self.ck_signed = QCheckBox("Bỏ qua file đã ký số (khuyến nghị – nén làm mất hiệu lực chữ ký)")
+        self.ck_clean = QCheckBox("✨ Rõ chữ (khuyến nghị)")
+        self.ck_clean.setToolTip("Làm trắng nền giấy, chữ đậm và sắc hơn; trang không có màu (không dấu đỏ, chữ ký màu)\n"
+                                 "lưu ảnh xám – nhẹ hơn, nén nhanh hơn. Trang có dấu đỏ / ảnh màu vẫn giữ màu.\n"
+                                 "Bỏ chọn nếu cần giữ nguyên màu giấy như bản scan.")
+        self.ck_clean.setChecked(True)
+        row.addWidget(self.ck_clean)
+        row.addSpacing(16)
+        self.ck_signed = QCheckBox("Bỏ qua file đã ký số")
+        self.ck_signed.setToolTip("Khuyến nghị – nén làm mất hiệu lực chữ ký số.")
         self.ck_signed.setChecked(True)
         row.addWidget(self.ck_signed)
         row.addStretch(1)
-        self.lbl_scope = QLabel("")
-        self.lbl_scope.setStyleSheet("color:#475569")
-        row.addWidget(self.lbl_scope)
         cl.addLayout(row)
         row = QHBoxLayout()
-        self.rb_new = QRadioButton("Lưu sang thư mục mới (giữ nguyên file gốc)")
+        self.rb_new = QRadioButton("Lưu sang thư mục mới (giữ file gốc)")
         self.rb_over = QRadioButton("Ghi đè file gốc")
         self.rb_new.setChecked(True)
         row.addWidget(self.rb_new)
@@ -102,6 +117,9 @@ class CompressPanel(QWidget):
         self.ck_backup.setChecked(True)
         row.addWidget(self.ck_backup)
         row.addStretch(1)
+        self.lbl_scope = QLabel("")
+        self.lbl_scope.setStyleSheet("color:#475569")
+        row.addWidget(self.lbl_scope)
         cl.addLayout(row)
         row = QHBoxLayout()
         row.addWidget(QLabel("Thư mục đích:"))
@@ -112,8 +130,10 @@ class CompressPanel(QWidget):
         b.clicked.connect(self.pick_out)
         row.addWidget(b)
         cl.addLayout(row)
-        hint = QLabel("Chỉ nén ảnh nằm trên các trang vượt giới hạn. File chỉ có chữ/vector (không có ảnh) sẽ không nén được.")
+        hint = QLabel("Chỉ nén ảnh trên các trang vượt giới hạn; mặc định 250 KB/trang. Ảnh trên 300 dpi được hạ về 300 dpi. "
+                      "File chỉ có chữ/vector (không có ảnh) không nén được.")
         hint.setStyleSheet("color:#64748B;font-size:9pt")
+        hint.setWordWrap(True)
         cl.addWidget(hint)
         lay.addWidget(cfg)
         self.rb_new.toggled.connect(self.mode_changed)
@@ -128,32 +148,69 @@ class CompressPanel(QWidget):
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Interactive)
         hh.setStretchLastSection(True)
-        for i, w in enumerate((48, 340, 170, 60, 140, 90, 170, 240)):
+        for i, w in enumerate((44, 300, 150, 52, 130, 80, 160, 220)):
             self.table.setColumnWidth(i, w)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.itemSelectionChanged.connect(self.show_selected)
+        self.table.cellDoubleClicked.connect(lambda r, c: self.preview.open_external())
         lay.addWidget(self.table, 1)
+
+        # ---- xem trước: bản gốc ↔ bản đã nén (so độ rõ của chữ trước / sau khi nén)
+        pbox = QGroupBox("Xem Trước File PDF")
+        pl = QVBoxLayout(pbox)
+        pl.setContentsMargins(8, 8, 8, 8)
+        sw = QHBoxLayout()
+        self.btn_orig = QPushButton("📄 Bản gốc")
+        self.btn_comp = QPushButton("🗜 Bản đã nén")
+        for b, tip in ((self.btn_orig, "Xem file gốc (trước khi nén)"),
+                       (self.btn_comp, "Xem file sau khi nén – so độ rõ của chữ với bản gốc")):
+            b.setCheckable(True)
+            b.setObjectName("flat")
+            b.setProperty("size", "sm")
+            b.setToolTip(tip)
+            b.clicked.connect(self._switch_view)
+            sw.addWidget(b)
+        sw.addStretch(1)
+        pl.addLayout(sw)
+        self.lbl_view = QLabel("")
+        self.lbl_view.setObjectName("Hint")
+        self.lbl_view.setWordWrap(True)
+        pl.addWidget(self.lbl_view)
+        self.preview = PreviewPane(title="")
+        pl.addWidget(self.preview, 1)
+        pbox.setMinimumWidth(300)
+        self._view = "orig"
 
         bot = QHBoxLayout()
         self.lbl = QLabel("Chưa có dữ liệu – hãy chọn thư mục và bấm Quét.")
         self.lbl.setStyleSheet("font-weight:700;color:#1E40AF")
+        self.lbl.setWordWrap(True)
         bot.addWidget(self.lbl, 1)
         self.prog = QProgressBar()
-        self.prog.setFixedWidth(220)
+        self.prog.setFixedWidth(180)
         self.prog.hide()
         bot.addWidget(self.prog)
-        self.btn_an = QPushButton("🔍 Phân tích dung lượng trang")
+        self.btn_an = QPushButton("🔍 Phân tích")
+        self.btn_an.setToolTip("Phân tích dung lượng từng trang, đếm trang vượt giới hạn")
         self.btn_an.setObjectName("cyan")
         self.btn_an.clicked.connect(self.analyze)
         self.btn_stop = QPushButton("■ Dừng")
         self.btn_stop.setObjectName("danger")
         self.btn_stop.clicked.connect(self.stop)
         self.btn_stop.setEnabled(False)
-        self.btn_go = QPushButton("⚡ BẮT ĐẦU GIẢM DUNG LƯỢNG")
+        self.btn_go = QPushButton("⚡ BẮT ĐẦU NÉN")
         self.btn_go.setObjectName("success")
         self.btn_go.setProperty("size", "lg")
         self.btn_go.clicked.connect(self.compress)
         for w in (self.btn_an, self.btn_stop, self.btn_go):
             bot.addWidget(w)
         lay.addLayout(bot)
+        split.addWidget(left)
+        split.addWidget(pbox)
+        split.setStretchFactor(0, 66)
+        split.setStretchFactor(1, 34)
+        split.setSizes([900, 480])
+        split.setChildrenCollapsible(False)
         self.mode_changed()
         self._enable_actions()
 
@@ -188,6 +245,60 @@ class CompressPanel(QWidget):
         self.lbl.setText(f"{fmt(len(files))} file trong phạm vi. Bấm “Phân tích” để xem trang vượt giới hạn, "
                          "hoặc bắt đầu nén luôn." if files else "Không có file nào trong phạm vi.")
         self._enable_actions()
+        self.show_selected()
+
+    # ------------------------------------------------------------------ xem trước
+    def _paths_of(self, row: int) -> Tuple[str, str]:
+        """(file gốc, file đã nén) của dòng `row`; '' nếu chưa có. Ghi đè có sao lưu → gốc nằm ở _backup_goc."""
+        if not 0 <= row < len(self.files):
+            return "", ""
+        f = self.files[row]
+        orig, comp = f.path, ""
+        mode, r = self.memory.get(f.path, ("", None))
+        if mode == "compress" and r and r.status in (C.ST_COMPRESSED, C.ST_PARTIAL) and r.out_path \
+                and os.path.isfile(r.out_path):
+            comp = r.out_path
+            if os.path.normcase(os.path.abspath(r.out_path)) == os.path.normcase(os.path.abspath(f.path)):
+                bak = os.path.join(os.path.dirname(f.path), "_backup_goc", os.path.basename(f.path))
+                orig = bak if os.path.isfile(bak) else ""
+        return orig, comp
+
+    def show_selected(self):
+        rows = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
+        row = rows[0].row() if rows else -1
+        orig, comp = self._paths_of(row)
+        same_doc = row >= 0 and row == getattr(self, "_shown_row", -1)    # cùng file: giữ trang khi đổi gốc ↔ nén
+        self._shown_row = row
+        if row < 0:
+            self.preview.clear()
+            self.lbl_view.setText("")
+            self.btn_orig.setEnabled(False)
+            self.btn_comp.setEnabled(False)
+            return
+        if self._view == "comp" and not comp:
+            self._view = "orig"
+        if self._view == "orig" and not orig:
+            self._view = "comp"
+        self.btn_orig.setEnabled(bool(orig))
+        self.btn_comp.setEnabled(bool(comp))
+        self.btn_orig.setChecked(self._view == "orig")
+        self.btn_comp.setChecked(self._view == "comp")
+        path = orig if self._view == "orig" else comp
+        mode, r = self.memory.get(self.files[row].path, ("", None))
+        if comp and r:
+            self.lbl_view.setText(f"Đang xem: <b>{'bản gốc' if self._view == 'orig' else 'bản đã nén'}</b> · "
+                                  f"{fmt_size(r.before)} → {fmt_size(r.after)} · trang nặng nhất "
+                                  f"{r.max_before_kb:,.0f} → {r.max_after_kb:,.0f} KB".replace(",", "."))
+        else:
+            self.lbl_view.setText("Nén xong sẽ bấm được <b>Bản đã nén</b> để so độ rõ của chữ.")
+        if path:
+            self.preview.show_file(path, keep_view=same_doc)
+        else:
+            self.preview.clear("Không còn bản gốc (đã ghi đè, không sao lưu)")
+
+    def _switch_view(self):
+        self._view = "comp" if self.sender() is self.btn_comp else "orig"
+        self.show_selected()
 
     # ------------------------------------------------------------------ tiện ích
     def mode_changed(self):
@@ -212,7 +323,7 @@ class CompressPanel(QWidget):
         run = self.running
         for w in (self.btn_an, self.btn_go):
             w.setEnabled(not run and bool(self.files))
-        for w in (self.sp, self.ck_signed, self.rb_new, self.rb_over, self.out_edit, self.ck_backup):
+        for w in (self.sp, self.ck_clean, self.ck_signed, self.rb_new, self.rb_over, self.out_edit, self.ck_backup):
             w.setEnabled(not run)
         if not run:
             self.mode_changed()
@@ -294,6 +405,10 @@ class CompressPanel(QWidget):
         if not jobs:
             self.lbl.setText("Không có file nào để nén.")
             return
+        # chia nhân CPU: ít file thì mỗi file dùng nhiều luồng xử lý ảnh, nhiều file thì mỗi file 1–2 luồng
+        procs = min(C.safe_workers(), len(jobs))
+        threads = max(1, min(8, ((os.cpu_count() or 2) - 1) // procs))
+        jobs = [(i, args + (threads, self.ck_clean.isChecked())) for i, args in jobs]
         self.stats = {"before": 0, "after": 0, "ok": 0, "partial": 0, "fail": 0}
         self.lbl.setText(f"Đang nén {fmt(len(jobs))} file bằng {C.safe_workers()} tiến trình…")
         self._start("compress", jobs)
@@ -324,6 +439,10 @@ class CompressPanel(QWidget):
         if 0 <= i < len(self.files):
             self.memory[self.files[i].path] = (mode, r)
         self._render(mode, i, r)
+        rows = self.table.selectionModel().selectedRows()
+        if mode == "compress" and rows and rows[0].row() == i:
+            self._view = "comp"
+            self.show_selected()
         if mode == "compress":
             self.stats["before"] += r.before
             self.stats["after"] += r.after

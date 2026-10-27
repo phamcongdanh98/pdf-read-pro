@@ -56,12 +56,24 @@ các bước tiền tố/hậu tố, thay thế (văn bản/regex), bỏ dấu, 
 <li>Lăn chuột hết trang thì tự sang trang kế; phím PageUp/PageDown, Home/End. Xoay chỉ khi xem, không sửa file.</li>
 </ul>
 
-<h3 style="color:#1D4ED8">5. Tab Tách trang PDF (cắt &amp; ghép sổ lý lịch)</h3>
+<a name="split"></a><h3 style="color:#1D4ED8">5. Tab Tách trang PDF (cắt &amp; ghép sổ lý lịch)</h3>
+<p><b>4 bước:</b> ① chọn file → ② bấm hình kiểu tách → ③ xem khung <b>Kết quả</b> (giống 100% file xuất) → ④ bấm <b>LƯU</b>.</p>
+<table cellspacing="6" cellpadding="4">
+<tr><td><img src="img:a3_to_a4" width="340" height="120"></td><td valign="middle"><b>A3 ngang → 2 trang A4</b><br>Bản scan khổ A3 nằm ngang,
+mỗi bên là 1 trang → cắt đôi theo đường đỏ.</td></tr>
+<tr><td><img src="img:a4_to_a4" width="340" height="120"></td><td valign="middle"><b>A4 → 2 nửa → 2 trang A4</b><br>Trang A4 in 2 trang nhỏ
+(trên / dưới hoặc trái / phải) → mỗi nửa phóng thành 1 trang A4.</td></tr>
+<tr><td><img src="img:booklet" width="340" height="120"></td><td valign="middle"><b>Sổ lý lịch gỡ ghim</b><br>Sổ tháo ghim, scan 2 mặt
+từng tờ (mỗi mặt có 2 trang, mặt sau có thể bị lộn ngược) → app đọc số trang in và sắp lại đúng thứ tự 1, 2, 3…</td></tr>
+</table>
 <ul>
-<li>Chọn file ở ô <b>File</b> (danh sách file đang quét) hoặc <b>Chọn File PDF Khác…</b>; chuột phải 1 file ở tab Tổng quan → <b>Tách trang file này</b>.</li>
-<li><b>Mẫu có sẵn</b>: <i>A3 ngang → 2 trang A4</i> · <i>A4 → 2 nửa, phóng thành 2 trang A4</i> ·
-<i>Sổ lý lịch gỡ ghim (scan 2 mặt)</i>. App tự gợi ý mẫu theo khổ giấy của file.</li>
-<li>Khung giữa: trang scan gốc với <b>đường cắt màu đỏ</b> (kéo “Vị trí đường cắt” nếu lệch); nhãn <b>GIỮ NGUYÊN (BÌA)</b>,
+<li><b>Chọn file</b>: bấm <b>🔎 Chọn file…</b> – hộp chọn có ô tìm kiếm (gõ tên file, CCCD, tên người, thư mục; không cần
+dấu) và cây theo thư mục; nút <b>◀ ▶</b> để sang file trước / sau; <b>📂 File khác…</b> chọn file bất kỳ; hoặc
+<b>kéo thả</b> file PDF vào tab. Ở tab Tổng quan: chuột phải 1 file → <b>Tách trang file này</b>.</li>
+<li><b>Kiểu tách</b>: bấm 1 trong 3 hình ở cột trái. App tự gợi ý theo khổ giấy của file. Chỉnh thêm ở
+<b>Tuỳ chọn nâng cao</b> thì app chuyển sang “thiết lập tuỳ chỉnh”.</li>
+<li>Khung giữa: trang scan gốc với <b>đường cắt màu đỏ</b> – lệch thì <b>dùng chuột kéo đường đỏ</b> (rê tới đường đỏ,
+con trỏ đổi thành ↔, kéo; hiện số %), khung kết quả cập nhật ngay; nhãn <b>GIỮ NGUYÊN (BÌA)</b>,
 <b>MẶT SAU · XOAY 180°</b>. Khung phải: <b>xem trước kết quả giống 100% file xuất</b>, ghi rõ mỗi trang lấy từ đâu.</li>
 <li><b>Thứ tự sổ gỡ ghim</b>: sổ tháo ghim, scan 2 mặt từng tờ → app sắp lại đúng trang 1, 2, 3… Nếu thấy mặt 2, 4… bị lộn ngược,
 chọn <b>Xoay mặt sau (ADF): Có</b>. Số mặt scan (trừ bìa) phải chẵn.</li>
@@ -74,9 +86,26 @@ cam = cần xem lại). Trang không in số vẫn được xếp đúng nếu �
 <b>Lưu đè file gốc</b> có sao lưu vào <code>_backup_goc</code>. File có chữ ký số: file tách ra không còn chữ ký hợp lệ (app cảnh báo).</li>
 </ul>
 
+<a name="check"></a><h3 style="color:#1D4ED8">5b. Tab Kiểm tra trang</h3>
+<p><img src="img:check" width="340" height="120"></p>
+<ul>
+<li>Bấm <b>🔍 Kiểm tra</b> (giữ Ctrl khi bấm: chỉ file đang chọn). App đọc chữ và số trang in ở đầu / chân trang
+bằng Windows OCR, báo: trang <b>ngược</b> / <b>nằm ngang</b>, <b>sai thứ tự</b>, <b>thiếu số</b>, <b>trùng số</b>, <b>trang trắng</b>.</li>
+<li>Bấm 1 file để xem <b>Chi tiết từng trang</b> (số in đọc được, hướng, đề xuất sửa); bấm 1 trang để xem trang đó bên phải.
+Đọc sai số: bấm đôi ô <b>Số in</b> để sửa; sai hướng: chuột phải vào trang.</li>
+<li><b>🛠 Sửa tự động</b>: xoay đúng chiều, sắp xếp theo số trang, (tuỳ chọn) bỏ trang trắng – không nén lại ảnh.
+Mặc định lưu sang thư mục mới; ghi đè có sao lưu <code>_backup_goc</code>. Bỏ qua file đã ký số.</li>
+<li>File có số trùng (ghép nhiều văn bản) hoặc đọc được quá ít số sẽ <b>không tự sắp xếp</b> – app báo “Cần xem lại”.</li>
+</ul>
+
 <h3 style="color:#1D4ED8">6. Tab Giảm dung lượng PDF</h3>
 <ul>
-<li>Đặt <b>dung lượng tối đa mỗi trang</b> (KB). <b>Phân tích</b> để xem trang nặng nhất và số trang vượt.</li>
+<li>Đặt <b>dung lượng tối đa mỗi trang</b> (mặc định 250 KB, app nhớ lần chọn trước). <b>Phân tích</b> để xem trang
+nặng nhất và số trang vượt.</li>
+<li><b>✨ Rõ chữ</b> (khuyến nghị, mặc định bật): làm trắng nền giấy, chữ đậm và sắc hơn; trang không có màu lưu ảnh xám
+(nhẹ, nhanh); trang có dấu đỏ / chữ ký màu / ảnh màu vẫn giữ màu. Bỏ chọn nếu cần giữ nguyên màu giấy.</li>
+<li><b>Xem trước</b> bên phải: bấm 1 file để xem; nén xong bấm <b>Bản gốc</b> / <b>Bản đã nén</b> để so độ rõ của chữ
+(giữ đúng trang đang xem). Bấm đôi để mở bằng phần mềm đọc PDF.</li>
 <li>Mặc định <b>lưu sang thư mục mới</b> (giữ nguyên file gốc) và <b>bỏ qua file đã ký số</b> (nén làm mất hiệu lực chữ ký).</li>
 <li>Ghi đè file gốc: có tuỳ chọn sao lưu bản gốc vào <code>_backup_goc</code>.</li>
 <li>Chỉ nén được ảnh; file toàn chữ/vector báo “Không có ảnh để nén”.</li>
@@ -104,6 +133,35 @@ Bấm 1 chi bộ xem tổng hợp và danh sách người còn thiếu; bấm 1 
 <b>Danh sách thiếu</b> (chỉ người còn thiếu, cột “Đã bổ sung”) · <b>Giải thích</b>. Tick <b>Kèm báo cáo nâng cao</b> để thêm:
 Chi tiết file · Thống kê giấy tờ (124 mã) · Vấn đề cần xử lý. Sẵn khổ A4 ngang, có nút lọc ở dòng tiêu đề.</li>
 </ul>
+
+<h3 style="color:#1D4ED8">7b. Tab Gom ký số (ký hàng loạt nhiều hồ sơ)</h3>
+<ol>
+<li>Quét thư mục <b>chi bộ</b> (hoặc cả Hồ sơ số hóa) có các thư mục hồ sơ <code>CCCD_HoVaTen</code>
+(vd <code>056123456789_TranVanThai</code>).</li>
+<li>Bấm <b>① GOM ĐỂ KÝ</b>: app <b>chép</b> các file <b>chưa ký</b> vào thư mục gom, tên thêm đuôi hồ sơ:
+<code>01.Ly_lich_nguoi_xin_vao_Dang_056123456789_TranVanThai.pdf</code>. File gốc giữ nguyên.</li>
+<li>Mở thư mục gom, <b>ký số hàng loạt</b> bằng phần mềm ký (phần mềm tạo thêm file <code>….signed.pdf</code>).</li>
+<li>Bấm <b>🔍 Kiểm tra trả về</b> để xem trước, rồi <b>② TRẢ VỀ SAU KÝ</b>: bản đã ký về đúng hồ sơ, bỏ đuôi
+(<code>01.Ly_lich_nguoi_xin_vao_Dang.signed.pdf</code>); bản sao chưa ký giống bản gốc được xoá; file chưa ký xong
+giữ lại trong thư mục gom để ký tiếp.</li>
+</ol>
+<ul><li><b>② Sau ký</b> có 2 cách: <b>Trả về thư mục hồ sơ gốc</b> (như trên) hoặc <b>Chép ra thư mục mới</b>
+(mặc định): hồ sơ gốc và thư mục gom giữ nguyên; thư mục mới có cùng cây <code>Chi bộ\\CCCD_HoVaTen</code>, chứa bản
+<code>.signed</code> + bản chưa ký đã bỏ đuôi; bật <b>Chép kèm đủ bộ hồ sơ</b> để chép thêm các file khác của hồ sơ.</li>
+<li>Không bao giờ ghi đè: trùng tên mà khác nội dung → báo <b>xung đột</b>, giữ lại. Có <b>↶ Hoàn tác</b>.</li>
+<li>File <code>_gom_ky_so.json</code> trong thư mục gom là <b>sổ ghi</b> (file nào của hồ sơ nào), được ẩn; cứ để nguyên khi ký
+– phần mềm ký chỉ ký PDF. Lỡ xoá sổ vẫn trả về được theo đuôi <code>_CCCD_HoVaTen</code>.</li>
+<li><b>🛡 Kiểm tra chữ ký số thật + số trang</b> (bật sẵn): bản ký chỉ được nhận khi có chữ ký số thật (không chỉ đổi
+tên .signed), chữ ký không hỏng, mở được, cùng số trang bản gốc, phần mềm ký đã ghi xong và bản gốc không bị thay sau khi
+gom. Sai → giữ lại, cột <b>Ghi chú</b> nói lý do; tích <b>⚠ Chỉ dòng cần xử lý</b> để xem nhanh.</li>
+<li><b>Chia lô</b> khi gom: theo chi bộ hoặc mỗi lô N file (thư mục con) – ký từng lô. Phần mềm ký ghi ra thư mục con
+<code>Signed\\</code>, đặt đuôi <code>_signed</code> / <code>_ky</code> hay ký đè lên file đều được nhận.</li>
+<li><b>👁 Tự cập nhật khi đang ký</b>: bảng tự kiểm tra lại khi có file mới, dòng trên bảng ghi <i>Đã ký hợp lệ X / Y văn bản</i>.</li>
+<li><b>📦 Tách file cần ký lại</b>: file chưa ký → thư mục <code>Ký lại &lt;ngày giờ&gt;</code> để ký riêng phần còn thiếu;
+bản ký lỗi → <code>_Bản ký lỗi</code>. <b>📊 Xuất Excel</b>: tổng hợp theo hồ sơ + chi tiết. Ô tìm kiếm không cần dấu.</li>
+<li><b>↶ Hoàn tác</b> nhớ cả sau khi tắt app. Ổ không đủ chỗ → báo trước khi chép; đường dẫn quá dài → cảnh báo.</li>
+<li>Trả về / chép ra <b>không cần quét lại</b>: chỉ cần <b>📁 Chọn…</b> đúng thư mục gom rồi bấm <b>🔍 Kiểm tra trả về</b> –
+app đọc sổ ghi để biết thư mục hồ sơ gốc và tự đặt thư mục mới là <code>&lt;thư mục hồ sơ&gt; - Đã ký</code>.</li></ul>
 
 <h3 style="color:#1D4ED8">8. Tab Đối chiếu danh sách (so với file Excel của hệ thống)</h3>
 <ul>
@@ -135,6 +193,24 @@ Ngoài danh sách · Cần sửa · Giải thích.</li>
 
 <h2 style="color:#1E40AF;margin-top:18px">📋 Lịch sử phiên bản</h2>
 <ul>
+<li><b>1.8.0</b> – Tab mới <b>Kiểm tra trang</b>: phát hiện trang ngược / nằm ngang, sai thứ tự, thiếu / trùng số trang,
+trang trắng và sửa tự động. Tab Giảm dung lượng: khung xem trước <b>cao hết tab</b> như Tổng quan. Tab Tách trang:
+hộp <b>chọn file có tìm kiếm</b> (thay danh sách thả xuống dài), nút file trước / sau, kéo thả, chọn kiểu tách bằng
+<b>hình minh hoạ</b>. Hướng dẫn có hình. App <b>nhớ mọi lựa chọn</b> khi tắt; nút <b>↺ Mặc định</b> khôi phục cài đặt gốc.</li>
+<li><b>1.8.0</b> – Tab mới <b>Gom ký số</b>: gom file chưa ký của nhiều hồ sơ vào 1 thư mục (tên thêm đuôi
+_CCCD_HoVaTen) để ký hàng loạt, ký xong trả bản .signed về đúng hồ sơ hoặc chép ra thư mục mới. Kiểm tra trả về
+hàng nghìn file chạy nền, không đứng máy (13 s → 0,3 s); sổ ghi được ẩn. Kiểm tra chữ ký số thật + số trang của bản
+ký, phát hiện file đang ký / bản gốc đã đổi / trùng tên hồ sơ, chia lô, tự cập nhật khi ký, tìm kiếm + lọc, tách file cần
+ký lại, xuất Excel, hoàn tác nhớ sau khi tắt app, chép an toàn (.part, kiểm tra dung lượng, đường dẫn dài).</li>
+<li><b>1.8.0 (tối ưu)</b> – Đỡ khựng với thư mục hàng nghìn file: đổi bộ lọc / phạm vi chỉ nạp tab đang mở
+(tab khác nạp khi mở tới); tự đọc số trang chuẩn bị ảnh từng phần; xuất Excel (báo cáo, đối chiếu) chạy nền.
+Exe có thông tin phiên bản, có bản zip portable (ít bị phần mềm diệt virus báo nhầm hơn).</li>
+<li><b>1.7.0</b> – <b>Giao diện tối</b> (nút 🌙 / ☀ trên banner). Tab Giảm dung lượng có <b>xem trước</b> và so
+<b>Bản gốc ↔ Bản đã nén</b>; mặc định <b>250 KB/trang</b>; chế độ <b>✨ Rõ chữ</b> (làm trắng nền, tự chuyển ảnh xám,
+hạ ảnh &gt; 300 dpi) với bậc nén mới dựa trên nghiên cứu độ rõ chữ tiếng Việt; tinh chỉnh để nén sát giới hạn. Sửa lỗi
+màn hình nhỏ bị mất phần dưới (mỗi tab tự cuộn, thanh công cụ thu gọn).</li>
+<li><b>1.6.2</b> – Sửa lỗi giảm dung lượng báo nhầm “Không có ảnh để nén” với file PDF scan bình thường:
+ảnh JPEG đã nén sẵn và ảnh nằm trong Form XObject (máy scan, đóng dấu, ghép trang). Nén nhanh hơn: đọc chất lượng JPEG có sẵn để bỏ qua bậc vô ích, xử lý nhiều ảnh song song trong 1 file, bậc nén mịn hơn (sát giới hạn hơn).</li>
 <li><b>1.6.1</b> – Mở app nhanh hơn (exe gọn 100 → 59 MB, bỏ thư viện không dùng; không còn đọc file Excel đối chiếu
 lúc khởi động). Nén nhanh hơn khoảng 7 lần so với app Giamdungluong_Full cũ: trang đạt ở bậc nào dừng ở bậc đó, tự dự đoán bậc nén, bậc nén mịn ưu tiên giữ nguyên độ phân giải (chữ nét hơn).
 Gán cột Excel bằng cách bấm tiêu đề cột. Icon mới trên thanh taskbar.</li>

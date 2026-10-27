@@ -230,12 +230,19 @@ class PreviewPane(QWidget):
                   self.btn_rl, self.btn_r180, self.btn_rr, self.btn_open):
             w.setEnabled(on)
 
-    def show_file(self, path: str) -> None:
+    def show_file(self, path: str, keep_view: bool = False) -> None:
+        """keep_view: giữ trang / thu phóng / xoay hiện tại (so 2 bản của cùng 1 tài liệu, vd gốc ↔ đã nén);
+        cùng đường dẫn thì vẽ lại (file có thể vừa bị ghi đè)."""
         if path == self.path:
+            if keep_view:
+                self._debounce.start()
             return
-        self.path, self.page, self.rotation = path, 0, 0
-        self.fit = FIT_PAGE
-        self._mark_fit()
+        if keep_view and self.path:
+            self.path = path
+        else:
+            self.path, self.page, self.rotation = path, 0, 0
+            self.fit = FIT_PAGE
+            self._mark_fit()
         self.lbl_file.setText(os.path.basename(path))
         self.lbl_file.setToolTip(path)
         self._enable(True)
@@ -262,7 +269,7 @@ class PreviewPane(QWidget):
             self._render()
 
     def goto(self, page: int) -> None:
-        if self.total and 0 <= page < self.total and page != self.page:
+        if 0 <= page and (not self.total or page < self.total) and page != self.page:   # file vừa mở: chưa biết tổng
             self.page = page
             self._debounce.start()
         self.spin.setValue(self.page + 1)

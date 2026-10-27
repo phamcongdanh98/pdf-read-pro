@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import List, Optional, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -216,6 +216,58 @@ async def _read_upright(img: Image.Image, max_page: int) -> Optional[int]:
     top, bottom = img.crop((0, 0, w, s)), img.crop((0, h - s, w, h))
     n = await _read_strip(bottom, max_page)
     return n if n is not None else await _read_strip(top, max_page)
+
+
+async def _orientation4(img: Image.Image) -> Optional[int]:
+    """Góc (độ, ngược chiều kim đồng hồ – như PIL rotate) cần xoay để trang đứng thuận: 0 / 90 / 180 / 270,
+    None = không đủ chữ để biết. Thử chiều dọc trước; chỉ thử nằm ngang khi chưa rõ (đỡ tốn thời gian)."""
+    w, h = img.size
+    band = img.crop((0, int(h * 0.25), w, int(h * 0.75)))
+    a = _letters(await _ocr_lines(band))
+    b = _letters(await _ocr_lines(band.rotate(180)))
+    if max(a, b) >= 20 and max(a, b) >= 1.35 * min(a, b):
+        return 0 if a >= b else 180
+    side = img.rotate(90, expand=True)
+    sw, sh = side.size
+    band = side.crop((0, int(sh * 0.25), sw, int(sh * 0.75)))
+    c = _letters(await _ocr_lines(band))
+    d = _letters(await _ocr_lines(band.rotate(180)))
+    hi, lo = max(c, d), min(c, d)
+    if hi >= 20 and hi >= 1.35 * max(a, b, lo):
+        return 90 if c >= d else 270
+    return None
+
+
+async def _page_info(img: Image.Image, max_page: int) -> Tuple[Optional[int], Optional[int]]:
+    img = img.convert("L")
+    ang = await _orientation4(img)
+    n = await _read_upright(img.rotate(ang, expand=True) if ang else img, max_page)
+    if ang is None:
+        if n is not None:
+            return 0, n
+        n = await _read_upright(img.rotate(180), max_page)      # trang ít chữ (bìa…) nhưng có số in
+        return (180 if n is not None else None), n
+    return ang, n
+
+
+def page_infos(images: Iterable[Image.Image], max_page: int = 999,
+               progress=None, cancelled=None) -> List[Tuple[Optional[int], Optional[int]]]:
+    """Mỗi ảnh trang → (góc cần xoay để đứng thuận 0/90/180/270 hoặc None, số trang in hoặc None).
+    `images` có thể là generator (vẽ từng trang khi cần – đỡ tốn RAM với file nhiều trang)."""
+    if not available():
+        raise RuntimeError("Máy không có Windows OCR (cần Windows 10/11).")
+
+    async def run():
+        out = []
+        for im in images:
+            if cancelled and cancelled():
+                break
+            out.append(await _page_info(im, max_page) if im is not None else (None, None))
+            if progress:
+                progress(len(out))
+        return out
+
+    return asyncio.run(run())
 
 
 def read_pages(images: Sequence[Image.Image], max_page: int = 999,

@@ -6,16 +6,24 @@ from __future__ import annotations
 import os
 from typing import List, Optional
 
-from PySide6.QtCore import QRectF, QThread, QTimer, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
+from PySide6.QtCore import QRectF, QSize, QThread, QTimer, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout,
-                               QLabel, QLineEdit, QMessageBox, QSizePolicy, QSpinBox, QSplitter, QVBoxLayout, QWidget)
+                               QFrame, QLabel, QLineEdit, QMessageBox, QScrollArea, QSizePolicy, QSpinBox, QSplitter,
+                               QToolButton,
+                               QVBoxLayout, QWidget)
 
 from ..core import activity, pagenum, splitter as S
 from ..core.models import FileInfo
+from . import file_picker, illustrations
 from .common import open_path
 from .preview import release_document
 from .styles import button
+from .widgets import ElidedLabel
+
+PRESET_TEXT = {"a3_to_a4": "A3 ngang → 2 trang A4\nScan khổ A3, mỗi bên là 1 trang",
+               "a4_to_a4": "A4 → 2 nửa → 2 trang A4\nMỗi nửa trang phóng thành A4",
+               "booklet": "Sổ lý lịch gỡ ghim\nScan 2 mặt → sắp đúng thứ tự"}
 
 try:
     import pymupdf as fitz
@@ -24,13 +32,21 @@ except ImportError:  # pragma: no cover
 
 
 class PageView(QLabel):
-    """Hiển thị 1 trang vừa khít khung, nét theo DPI; vẽ đường cắt đỏ và nhãn trạng thái nếu có."""
+    """Hiển thị 1 trang vừa khít khung, nét theo DPI; vẽ đường cắt đỏ và nhãn trạng thái nếu có.
+    draggable=True: kéo đường cắt đỏ bằng chuột (phát cutDragged(%) liên tục khi kéo)."""
+    cutDragged = Signal(float)
+    GRAB = 8                 # khoảng cách (điểm ảnh) quanh đường cắt để bắt chuột
 
-    def __init__(self, empty_text: str):
+    def __init__(self, empty_text: str, draggable: bool = False):
         super().__init__()
+        self.draggable = draggable
+        self._dragging = False
+        self._base: Optional[QImage] = None     # ảnh trang chưa vẽ đường cắt (vẽ lại nhanh khi kéo)
+        self._dpr = 1.0
+        self.setMouseTracking(draggable)
         self.setAlignment(Qt.AlignCenter)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self.setMinimumSize(200, 240)
+        self.setMinimumSize(180, 160)
         self.setStyleSheet("background:#FFFFFF;border:1px dashed #CBD5E1;border-radius:4px;color:#64748B;")
         self.empty_text = empty_text
         self.doc = None
@@ -44,18 +60,82 @@ class PageView(QLabel):
         self.setText(empty_text)
 
     def show_page(self, doc, index: int, cut=None, badge: str = ""):
+        same = doc is self.doc and index == self.index and self._base is not None
         self.doc, self.index, self.cut, self.badge = doc, index, cut, badge
-        self._t.start()
+        if same and not self._dragging:
+            self._compose()                     # chỉ đổi đường cắt / nhãn: không cần vẽ lại trang
+        elif not same:
+            self._base = None
+            self._t.start()
 
     def clear(self, text: str = ""):
         self.doc = None
+        self._base = None
+        self.unsetCursor()
         self.setPixmap(QPixmap())
         self.setText(text or self.empty_text)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
         if self.doc is not None:
+            self._base = None
             self._t.start()
+
+    # ---- kéo đường cắt
+    def _img_rect(self) -> QRectF:
+        """Vị trí ảnh trang trong khung (toạ độ widget)."""
+        if self._base is None:
+            return QRectF()
+        w, h = self._base.width() / self._dpr, self._base.height() / self._dpr
+        return QRectF((self.width() - w) / 2, (self.height() - h) / 2, w, h)
+
+    def _near_cut(self, pos) -> bool:
+        if not (self.draggable and self.cut and self._base is not None):
+            return False
+        r = self._img_rect()
+        mode, pct = self.cut
+        if mode == "left_right":
+            return abs(pos.x() - (r.left() + r.width() * pct / 100)) <= self.GRAB and r.top() <= pos.y() <= r.bottom()
+        return abs(pos.y() - (r.top() + r.height() * pct / 100)) <= self.GRAB and r.left() <= pos.x() <= r.right()
+
+    def _pct_at(self, pos) -> float:
+        r = self._img_rect()
+        if self.cut[0] == "left_right":
+            v = (pos.x() - r.left()) / max(1.0, r.width()) * 100
+        else:
+            v = (pos.y() - r.top()) / max(1.0, r.height()) * 100
+        return float(max(5, min(95, round(v))))
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton and self._near_cut(e.position()):
+            self._dragging = True
+            e.accept()
+            return
+        super().mousePressEvent(e)
+
+    def mouseMoveEvent(self, e):
+        pos = e.position()
+        if self._dragging:
+            pct = self._pct_at(pos)
+            if pct != self.cut[1]:
+                self.cut = (self.cut[0], pct)
+                self._compose()
+                self.cutDragged.emit(pct)
+            return
+        if self._near_cut(pos):
+            self.setCursor(Qt.SplitHCursor if self.cut[0] == "left_right" else Qt.SplitVCursor)
+            self.setToolTip("Kéo để dời đường cắt")
+        else:
+            self.unsetCursor()
+            self.setToolTip("")
+        super().mouseMoveEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        if self._dragging:
+            self._dragging = False
+            self._compose()
+            return
+        super().mouseReleaseEvent(e)
 
     def _render(self):
         if self.doc is None or not (0 <= self.index < self.doc.page_count):
@@ -65,14 +145,24 @@ class PageView(QLabel):
         bw, bh = max(50, self.width() - 16), max(50, self.height() - 16)
         z = min(bw / pg.rect.width, bh / pg.rect.height)
         pix = pg.get_pixmap(matrix=fitz.Matrix(z * dpr, z * dpr), alpha=False)
-        img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888).copy()
+        self._base = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888).copy()
+        self._dpr = dpr
+        self._compose()
+
+    def _compose(self):
+        """Vẽ khung, đường cắt, nhãn lên bản sao của ảnh trang."""
+        if self._base is None:
+            return
+        dpr = self._dpr
+        img = self._base.copy()
         p = QPainter(img)
         p.setRenderHint(QPainter.Antialiasing)
         p.setPen(QPen(QColor("#CBD5E1"), 1 * dpr))
         p.drawRect(0, 0, img.width() - 1, img.height() - 1)
         if self.cut:
             mode, pct = self.cut
-            pen = QPen(QColor("#DC2626"), 2.5 * dpr, Qt.DashLine)
+            pen = QPen(QColor("#DC2626"), (3.5 if self._dragging else 2.5) * dpr,
+                       Qt.SolidLine if self._dragging else Qt.DashLine)
             p.setPen(pen)
             if mode == "left_right":
                 x = img.width() * pct / 100
@@ -80,6 +170,26 @@ class PageView(QLabel):
             else:
                 y = img.height() * pct / 100
                 p.drawLine(0, int(y), img.width(), int(y))
+            if self.draggable:                   # tay nắm ở giữa đường cắt + % khi đang kéo
+                cx, cy = (x, img.height() / 2) if mode == "left_right" else (img.width() / 2, y)
+                p.setPen(QPen(QColor("#FFFFFF"), 1.5 * dpr))
+                p.setBrush(QColor("#DC2626"))
+                hw, hh = (7 * dpr, 22 * dpr) if mode == "left_right" else (22 * dpr, 7 * dpr)
+                p.drawRoundedRect(QRectF(cx - hw, cy - hh, 2 * hw, 2 * hh), 4 * dpr, 4 * dpr)
+                if self._dragging:
+                    f = QFont("Segoe UI")
+                    f.setBold(True)
+                    f.setPixelSize(int(13 * dpr))
+                    p.setFont(f)
+                    txt = f"{pct:.0f} %"
+                    tw = p.fontMetrics().horizontalAdvance(txt) + 12 * dpr
+                    r = QRectF(cx + 12 * dpr, cy - 34 * dpr, tw, 22 * dpr) if mode == "left_right" else \
+                        QRectF(cx - tw / 2, cy + 12 * dpr, tw, 22 * dpr)
+                    p.setPen(Qt.NoPen)
+                    p.setBrush(QColor("#DC2626"))
+                    p.drawRoundedRect(r, 5 * dpr, 5 * dpr)
+                    p.setPen(QColor("#FFFFFF"))
+                    p.drawText(r, Qt.AlignCenter, txt)
         if self.badge:
             f = QFont("Segoe UI")
             f.setBold(True)
@@ -118,6 +228,7 @@ class OcrThread(QThread):
 
 class SplitPanel(QWidget):
     saved = Signal(str)
+    helpRequested = Signal(str)          # mở tab Hướng dẫn tại mục (anchor)
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -136,26 +247,36 @@ class SplitPanel(QWidget):
         self._ocr_keys = None
         self._ocr_opts: Optional[S.SplitOptions] = None
         self._ocr_thread: Optional[OcrThread] = None
+        self._prep = None                    # đang chuẩn bị ảnh nửa trang cho OCR (từng phần)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(10, 10, 10, 8)
         outer.setSpacing(8)
 
-        # ---- file nguồn
+        # ---- file nguồn (hộp chọn có tìm kiếm thay cho danh sách thả xuống hàng nghìn dòng)
+        self.setAcceptDrops(True)
         g = QGroupBox("File PDF cần tách trang")
         gl = QVBoxLayout(g)
+        steps = QLabel("<b>①</b> Chọn file (hoặc kéo thả file PDF vào đây) &nbsp;➜&nbsp; <b>②</b> Bấm hình kiểu tách "
+                       "bên trái &nbsp;➜&nbsp; <b>③</b> Xem khung <b>Kết quả</b> (giống 100% file xuất) &nbsp;➜&nbsp; "
+                       "<b>④</b> Bấm <b>LƯU</b>")
+        steps.setObjectName("Steps")
+        sr = QHBoxLayout()
+        sr.addWidget(steps, 1)
+        sr.addWidget(button("❓ Hướng dẫn có hình", "flat", lambda: self.helpRequested.emit("split"), size="sm"))
+        gl.addLayout(sr)
         r = QHBoxLayout()
-        r.addWidget(QLabel("File:"))
-        self.cb_file = QComboBox()
-        self.cb_file.setMinimumWidth(420)
-        self.cb_file.activated.connect(lambda i: self.load_file(self.cb_file.itemData(i)))
-        r.addWidget(self.cb_file, 1)
-        r.addWidget(button("📂 Chọn File PDF Khác...", "primary", self.pick_file, size="sm"))
+        self.lbl_file = ElidedLabel("Chưa chọn file – bấm “Chọn file” hoặc kéo thả file PDF vào đây")
+        self.lbl_file.setObjectName("FileBox")
+        r.addWidget(self.lbl_file, 1)
+        self.btn_prev = button("◀", "light", lambda: self._step_file(-1), "File trước trong thư mục đã quét", "sm")
+        self.btn_next = button("▶", "light", lambda: self._step_file(1), "File sau trong thư mục đã quét", "sm")
+        self.btn_pick = button("🔎 Chọn file…", "primary", self.pick_scanned,
+                               "Chọn trong thư mục đã quét – tìm theo tên, CCCD, thư mục (không cần dấu)", "sm")
+        for b in (self.btn_prev, self.btn_next, self.btn_pick):
+            r.addWidget(b)
+        r.addWidget(button("📂 File khác…", "light", self.pick_file, "Chọn file PDF bất kỳ trên máy", "sm"))
         gl.addLayout(r)
-        self.lbl_info = QLabel("Chọn 1 file PDF scan (A3, A4 hoặc sổ lý lịch gỡ ghim) để tách trang.")
-        self.lbl_info.setObjectName("Hint")
-        self.lbl_info.setWordWrap(True)
-        gl.addWidget(self.lbl_info)
         self.lbl_warn = QLabel("")
         self.lbl_warn.setWordWrap(True)
         self.lbl_warn.setStyleSheet("color:#B45309;background:#FFF7ED;border:1px solid #FED7AA;border-radius:5px;"
@@ -169,8 +290,7 @@ class SplitPanel(QWidget):
 
         # ---- thiết lập
         cfg = QGroupBox("Thiết lập tách trang")
-        cfg.setMinimumWidth(370)
-        cfg.setMaximumWidth(460)
+        cfg.setMinimumWidth(360)
         form = QFormLayout(cfg)
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
         form.setVerticalSpacing(7)
@@ -182,12 +302,37 @@ class SplitPanel(QWidget):
             c.currentIndexChanged.connect(self._changed)
             return c
 
-        self.cb_preset = QComboBox()
+        self.cb_preset = QComboBox(self)          # giữ giá trị mẫu (ẩn) – người dùng bấm thẻ có hình bên dưới
+        self.cb_preset.hide()
         self.cb_preset.addItem("⚙ Tuỳ chỉnh", "")
         for key, (name, _) in S.PRESETS.items():
             self.cb_preset.addItem(("📖 " if key == "booklet" else "📄 ") + name, key)
         self.cb_preset.currentIndexChanged.connect(self._preset_chosen)
-        form.addRow("Mẫu có sẵn:", self.cb_preset)
+        self.cb_preset.currentIndexChanged.connect(self._sync_cards)
+        cards = QWidget()
+        cvl = QVBoxLayout(cards)
+        cvl.setContentsMargins(0, 0, 0, 0)
+        cvl.setSpacing(6)
+        self.cards = {}
+        for key in S.PRESETS:
+            b = QToolButton()
+            b.setObjectName("PresetCard")
+            b.setCheckable(True)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            b.setIcon(QIcon(QPixmap.fromImage(illustrations.image(key, 128, 54, captions=False))))
+            b.setIconSize(QSize(128, 54))
+            b.setText(PRESET_TEXT[key])
+            b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            b.clicked.connect(lambda _=False, k=key: self._card_clicked(k))
+            cvl.addWidget(b)
+            self.cards[key] = b
+        self.lbl_custom = QLabel("⚙ Đang dùng thiết lập tuỳ chỉnh – xem “Tuỳ chọn nâng cao”.")
+        self.lbl_custom.setObjectName("Hint")
+        self.lbl_custom.hide()
+        cvl.addWidget(self.lbl_custom)
+        form.addRow(QLabel("<b>Chọn kiểu tách</b> (bấm vào hình):"))
+        form.addRow(cards)
         self.cb_mode = combo([("⚡ Tự động theo khổ", "auto"),
                               ("✂ Cắt Trái / Phải", "left_right"), ("✂ Cắt Trên / Dưới", "top_bottom"),
                               ("Không cắt", "none")])
@@ -279,12 +424,22 @@ class SplitPanel(QWidget):
         tip.setObjectName("Hint")
         tip.setWordWrap(True)
         form.addRow(tip)
-        split.addWidget(cfg)
+        # cột thiết lập tự cuộn riêng → thanh "Lưu kết quả" bên dưới luôn hiện, kể cả màn hình thấp
+        cfg_scroll = QScrollArea()
+        cfg_scroll.setWidgetResizable(True)
+        cfg_scroll.setFrameShape(QFrame.NoFrame)
+        cfg_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        cfg_scroll.setWidget(cfg)
+        cfg_scroll.setMinimumWidth(380)
+        cfg_scroll.setMaximumWidth(480)
+        cfg_scroll.setMinimumHeight(220)
+        split.addWidget(cfg_scroll)
 
         # ---- trang scan gốc
-        gs = QGroupBox("1. Trang Scan Gốc (đường cắt màu đỏ)")
+        gs = QGroupBox("1. Trang Scan Gốc (kéo đường cắt màu đỏ để chỉnh)")
         gsl = QVBoxLayout(gs)
-        self.view_src = PageView("Chưa chọn file")
+        self.view_src = PageView("Chưa chọn file", draggable=True)
+        self.view_src.cutDragged.connect(self._cut_dragged)
         gsl.addWidget(self.view_src, 1)
         self.lbl_src = QLabel("")
         self.lbl_src.setAlignment(Qt.AlignCenter)
@@ -353,7 +508,14 @@ class SplitPanel(QWidget):
         self._timer.setInterval(220)
         self._timer.timeout.connect(self.rebuild)
         self._apply_preset("a3_to_a4")
+        self._update_file_nav()
         self._update_enabled()
+
+    def _cut_dragged(self, pct: float):
+        """Kéo đường cắt trên trang scan → cập nhật ô Vị trí đường cắt (mở Tuỳ chọn nâng cao) và kết quả."""
+        if not self.btn_adv.isChecked():
+            self.btn_adv.setChecked(True)
+        self.sp_cut.setValue(int(pct))
 
     def _toggle_adv(self, on: bool):
         for _, fld in self._adv:
@@ -363,17 +525,52 @@ class SplitPanel(QWidget):
     # ------------------------------------------------------------------ dữ liệu vào
     def set_files(self, files: List[FileInfo]):
         self.files = files
-        cur = self.src_path
-        self.cb_file.blockSignals(True)
-        self.cb_file.clear()
-        for f in files:
-            self.cb_file.addItem(f"{f.name}   ·   {f.pages if f.pages is not None else '?'} trang   ·   {f.dir_rel or '(gốc)'}",
-                                 f.path)
-        if cur and self.cb_file.findData(cur) < 0:
-            self.cb_file.insertItem(0, os.path.basename(cur) + "   ·   (file ngoài)", cur)
-        self.cb_file.setCurrentIndex(self.cb_file.findData(cur) if cur else -1)
-        self.cb_file.setPlaceholderText("— Chọn file trong thư mục đang quét hoặc bấm “Chọn File PDF Khác...” —")
-        self.cb_file.blockSignals(False)
+        self._update_file_nav()
+
+    def _update_file_nav(self):
+        paths = [f.path for f in self.files]
+        has = bool(paths)
+        self.btn_pick.setEnabled(has)
+        self.btn_pick.setText(f"🔎 Chọn file… ({len(paths):,})".replace(",", ".") if has else "🔎 Chọn file…")
+        i = paths.index(self.src_path) if self.src_path in paths else -1
+        self.btn_prev.setEnabled(has and i != 0)
+        self.btn_next.setEnabled(has and (i < 0 or i < len(paths) - 1))
+
+    def pick_scanned(self):
+        p = file_picker.pick(self, self.files, self.src_path, "Chọn file PDF cần tách trang")
+        if p:
+            self.load_file(p)
+
+    def _step_file(self, step: int):
+        p = file_picker.neighbor(self.files, self.src_path, step)
+        if p:
+            self.load_file(p)
+
+    def _card_clicked(self, key: str):
+        i = self.cb_preset.findData(key)
+        if i == self.cb_preset.currentIndex():
+            self._sync_cards()
+        else:
+            self.cb_preset.setCurrentIndex(i)
+
+    def _sync_cards(self, *_):
+        key = self.cb_preset.currentData() or ""
+        for k, b in self.cards.items():
+            b.setChecked(k == key)
+        self.lbl_custom.setVisible(not key)
+
+    def dragEnterEvent(self, e):
+        if any(u.toLocalFile().lower().endswith(".pdf") for u in e.mimeData().urls()):
+            e.acceptProposedAction()
+        else:
+            e.ignore()
+
+    def dropEvent(self, e):
+        for u in e.mimeData().urls():
+            p = u.toLocalFile()
+            if p.lower().endswith(".pdf") and os.path.isfile(p):
+                self.load_file(os.path.normpath(p))
+                break
 
     def pick_file(self):
         start = os.path.dirname(self.src_path) if self.src_path else ""
@@ -391,13 +588,10 @@ class SplitPanel(QWidget):
             return
         self.src_path, self.src_doc = path, doc
         self.info = S.read_info(doc)
-        if self.cb_file.findData(path) < 0:
-            self.cb_file.insertItem(0, os.path.basename(path) + "   ·   (file ngoài)", path)
-        self.cb_file.blockSignals(True)
-        self.cb_file.setCurrentIndex(self.cb_file.findData(path))
-        self.cb_file.blockSignals(False)
-        self.lbl_info.setText(f"📄 <b>{os.path.basename(path)}</b> · {self.info.pages} trang scan · khổ: "
-                              f"<b>{self.info.label}</b> · {os.path.dirname(path)}")
+        rel = next((f.dir_rel or "(thư mục gốc)" for f in self.files if f.path == path), os.path.dirname(path))
+        self.lbl_file.set_full_text(f"📄 {os.path.basename(path)}   ·   {self.info.pages} trang scan   ·   khổ "
+                                    f"{self.info.label}   ·   {rel}", path)
+        self._update_file_nav()
         if self.info.has_signature:
             self.lbl_warn.setText("⚠ File này có chữ ký số. File sau khi tách là file MỚI nên KHÔNG còn chữ ký hợp lệ; "
                                   "file gốc vẫn giữ nguyên (không nên chọn “Lưu đè file gốc”).")
@@ -474,6 +668,7 @@ class SplitPanel(QWidget):
     # ------------------------------------------------------------------ tự đọc số trang
     def _clear_auto(self):
         self._ocr_token += 1                         # bỏ qua kết quả của lượt đọc cũ (nếu đang chạy)
+        self._prep = None
         self._reads = self._guess = None
         self.lbl_auto.hide()
         if self._ocr_thread is None:
@@ -485,19 +680,38 @@ class SplitPanel(QWidget):
         self.lbl_auto.show()
 
     def auto_order(self):
-        if self.src_doc is None or not pagenum.available() or self._ocr_thread is not None:
+        if self.src_doc is None or not pagenum.available() or self._ocr_thread is not None or self._prep:
             return
         self._clear_auto()
         opts = self.options()
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        # ảnh nửa trang vẽ bằng PyMuPDF ở luồng chính → vẽ từng ít một (≈ 40 ms/lượt) xen kẽ sự kiện giao diện
+        self._prep = (self._ocr_token, S.iter_half_images(self.src_doc, opts), [], [], opts)
+        self.btn_auto.setEnabled(False)
+        self.btn_auto.setText("⏳ Đang chuẩn bị ảnh…")
+        QTimer.singleShot(0, self._prep_step)
+
+    def _prep_step(self):
+        import time
+        if not self._prep or self._prep[0] != self._ocr_token:
+            return                                    # đã huỷ (đổi file / đổi thiết lập)
+        token, gen, keys, images, opts = self._prep
+        t0 = time.perf_counter()
         try:
-            keys, images = S.half_images(self.src_doc, opts)    # luồng chính: PyMuPDF
+            for k, im in gen:
+                keys.append(k)
+                images.append(im)
+                if time.perf_counter() - t0 > 0.04:
+                    self.btn_auto.setText(f"⏳ Đang chuẩn bị ảnh… {len(images)}")
+                    QTimer.singleShot(0, self._prep_step)
+                    return
         except S.SplitError as e:
+            self._prep = None
+            self._clear_auto()
             self._auto_msg(f"⚠ {e}", "#B91C1C")
             return
-        finally:
-            QApplication.restoreOverrideCursor()
+        self._prep = None
         if len(images) < 2:
+            self._clear_auto()
             self._auto_msg("⚠ Cần ít nhất 2 nửa trang để đọc số trang.", "#B45309")
             return
         self._ocr_keys, self._ocr_opts = keys, opts

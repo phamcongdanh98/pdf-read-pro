@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFile
                                QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from ..core import activity, compare as C
-from .common import fmt, open_path
+from .common import fmt, open_path, run_bg
 from .styles import button
 from .widgets import ElidedLabel, StatCard
 
@@ -559,13 +559,15 @@ class ComparePanel(QWidget):
         if not path:
             return
         from ..core.compare_excel import export_compare
-        try:
-            out = export_compare(self.cmp, os.path.normpath(path))
-        except PermissionError:
+        cmp, dst = self.cmp, os.path.normpath(path)
+        run_bg(self, self.btn_export, "⏳ Đang xuất Excel…", lambda: export_compare(cmp, dst), self._exported)
+
+    def _exported(self, out, err):
+        if isinstance(err, PermissionError):
             QMessageBox.warning(self, "Không lưu được", "File đang mở trong Excel – hãy đóng file rồi thử lại.")
             return
-        except OSError as e:
-            QMessageBox.warning(self, "Không lưu được", f"❌ {e}")
+        if err is not None:
+            QMessageBox.warning(self, "Không lưu được", f"❌ {err}")
             return
         activity.log("Xuất đối chiếu", os.path.basename(out))
         if QMessageBox.question(self, "Đã xuất", f"🎉 Đã lưu:\n{out}\n\nMở file ngay?") == QMessageBox.Yes:

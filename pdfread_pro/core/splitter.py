@@ -273,20 +273,23 @@ def _base_plan(norm: "fitz.Document", opts: SplitOptions) -> List[Unit]:
     return [u for u in units if u.clip is not None]
 
 
-def half_images(doc: "fitz.Document", opts: SplitOptions, dpi: int = 150):
-    """Ảnh xám từng nửa trang (theo thứ tự scan, đúng hướng xoay của thiết lập) để OCR.
-    Gọi ở luồng chính (PyMuPDF không an toàn đa luồng); ảnh PIL trả về dùng được ở luồng phụ."""
+def iter_half_images(doc: "fitz.Document", opts: SplitOptions, dpi: int = 150):
+    """Từng (khoá, ảnh xám) của các nửa trang (theo thứ tự scan, đúng hướng xoay của thiết lập) để OCR.
+    Gọi ở luồng chính (PyMuPDF không an toàn đa luồng) – là generator nên giao diện lấy từng ít một, không bị đơ;
+    ảnh PIL trả về dùng được ở luồng phụ."""
     from PIL import Image
     norm = normalized_copy(doc)
-    keys, images = [], []
     for u in _base_plan(norm, opts):
         pix = norm[u.src].get_pixmap(dpi=dpi, clip=u.clip, colorspace=fitz.csGRAY, alpha=False)
         im = Image.frombytes("L", (pix.width, pix.height), pix.samples)
         if u.rotate % 360:
             im = im.rotate(u.rotate, expand=True, fillcolor=255)     # PIL: dương = ngược chiều kim đồng hồ, như PDF
-        keys.append((unit_key(u), u.rotate % 360))
-        images.append(im)
-    return keys, images
+        yield (unit_key(u), u.rotate % 360), im
+
+
+def half_images(doc: "fitz.Document", opts: SplitOptions, dpi: int = 150):
+    pairs = list(iter_half_images(doc, opts, dpi))
+    return [k for k, _ in pairs], [im for _, im in pairs]
 
 
 def make_reads(keys, results) -> PageReads:

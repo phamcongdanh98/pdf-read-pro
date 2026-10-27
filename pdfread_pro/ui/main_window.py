@@ -7,17 +7,18 @@ import threading
 import time
 from typing import Dict, List, Optional
 
-from PySide6.QtCore import QSettings, Qt, QThread, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QTextCursor
+from PySide6.QtCore import QEvent, QSettings, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtGui import QColor, QGuiApplication, QTextCursor, QTextDocument
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFileDialog, QFrame, QGridLayout, QGroupBox,
                                QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
-                               QPlainTextEdit, QProgressBar, QPushButton, QSplitter, QTabWidget, QTextBrowser,
+                               QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSplitter, QTabWidget, QTextBrowser,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .. import paths
 from ..core import activity, renamer, scanner, stats as st
 from ..core.models import FILTER_ALL, FILTER_SIGNED, FILTER_UNSIGNED, FileInfo, ScanResult, match_filter
 from .common import REVIEW_TEXT, ListDialog, fmt, fmt_size, open_path, reveal, sig_label, who_when
+from .check_panel import CheckPanel
 from .compress_panel import CompressPanel
 from .guide import GUIDE_HTML
 from .preview import PreviewPane, release_document
@@ -27,6 +28,9 @@ from .compare_panel import ComparePanel
 from .rules1361_panel import Rules1361Panel
 from .split_panel import SplitPanel
 from .rules_panel import RulesPanel
+from .sign_panel import SignPanel
+from . import illustrations, styles
+from .persist import Persist
 from .styles import button
 from .widgets import ElidedLabel, StatCard
 
@@ -55,6 +59,45 @@ class ScanThread(QThread):
         self.finished_scan.emit(scanner.scan(self.root, self.recursive, self._cb, self.cancel_ev))
 
 
+class _FitScroll(QScrollArea):
+    """Khung cuộn của tab: trang luôn lấp đầy khung, chỉ cuộn khi khung nhỏ hơn kích thước TỐI THIỂU của trang.
+    (setWidgetResizable dùng chiều cao "ưu tiên" khi trang có nhãn tự xuống dòng → trang cao hơn khung dù vẫn
+    co được, làm thanh nút dưới cùng bị đẩy khuất.)"""
+
+    def __init__(self, page: QWidget):
+        super().__init__()
+        self.setFrameShape(QFrame.NoFrame)
+        self.setWidgetResizable(False)
+        self.setWidget(page)
+        page.installEventFilter(self)
+
+    def _fit(self):
+        w = self.widget()
+        if w is None:
+            return
+        m = w.minimumSizeHint().expandedTo(w.minimumSize())
+        vp = self.maximumViewportSize()
+        need_v = m.height() > vp.height()
+        need_h = m.width() > vp.width()
+        sb = self.style().pixelMetric(self.style().PixelMetric.PM_ScrollBarExtent)
+        width = vp.width() - (sb if need_v else 0)
+        height = vp.height() - (sb if need_h else 0)
+        w.resize(max(width, m.width()), max(height, m.height()))
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._fit()
+
+    def eventFilter(self, obj, e):
+        if obj is self.widget() and e.type() == QEvent.LayoutRequest:
+            QTimer.singleShot(0, self._fit)
+        return super().eventFilter(obj, e)
+
+
+def _scrollable(page: QWidget) -> QScrollArea:
+    return _FitScroll(page)
+
+
 def _btn(text: str, obj: str = "primary", slot=None, tip: str = "", size: str = "") -> QPushButton:
     return button(text, obj or "primary", slot, tip, size)
 
@@ -75,6 +118,7 @@ class MainWindow(QMainWindow):
         self.file_items: List[tuple] = []
         activity.add_listener(self._on_activity)
         self._build_ui()
+        self._init_persist()
         last = self.settings.value("last_folder", "")
         if last and os.path.isdir(last):
             self.path_edit.setText(last)
@@ -103,10 +147,24 @@ class MainWindow(QMainWindow):
         t.setObjectName("AppTitle")
         hl.addWidget(t)
         hl.addSpacing(12)
-        sub = QLabel("Kiểm tra chữ ký số · Đổi tên chuẩn 1361 · Tách trang · Giảm dung lượng · Báo cáo hồ sơ số hoá")
+        sub = QLabel("Kiểm tra chữ ký số · Đổi tên chuẩn 1361 · Tách trang · Kiểm tra trang · Giảm dung lượng · Báo cáo hồ sơ")
         sub.setObjectName("AppSubtitle")
         hl.addWidget(sub, 0, Qt.AlignVCenter)
+        self.sub_title = sub
         hl.addStretch(1)
+        self.btn_theme = QPushButton()
+        self.btn_theme.setObjectName("ThemeBtn")
+        self.btn_theme.setCursor(Qt.PointingHandCursor)
+        self.btn_theme.clicked.connect(self.toggle_theme)
+        hl.addWidget(self.btn_theme, 0, Qt.AlignVCenter)
+        self.btn_reset = QPushButton("↺ Mặc định")
+        self.btn_reset.setObjectName("ThemeBtn")
+        self.btn_reset.setCursor(Qt.PointingHandCursor)
+        self.btn_reset.setToolTip("Khôi phục cài đặt gốc: mọi ô tích / lựa chọn trong các tab, giao diện sáng")
+        self.btn_reset.clicked.connect(self.reset_settings)
+        hl.addWidget(self.btn_reset, 0, Qt.AlignVCenter)
+        hl.addSpacing(6)
+        self._update_theme_btn()
         ver = QLabel(f"v{paths.APP_VERSION}")
         ver.setObjectName("VersionPill")
         hl.addWidget(ver, 0, Qt.AlignVCenter)
@@ -131,7 +189,8 @@ class MainWindow(QMainWindow):
 
         r2 = QHBoxLayout()
         self.chk_rec = QCheckBox("Quét tất cả thư mục con bên trong (Recursive Scan)")
-        self.chk_rec.setChecked(self.settings.value("recursive", "true") != "false")
+        self.chk_rec.setToolTip("Quét tất cả thư mục con bên trong (Recursive Scan)")
+        self.chk_rec.setChecked(True)
         r2.addWidget(self.chk_rec)
         r2.addSpacing(24)
         r2.addWidget(QLabel("Tính số trang:"))
@@ -145,17 +204,23 @@ class MainWindow(QMainWindow):
         r2.addStretch(1)
         self.lbl_root = QLabel("", self)        # giữ để tương thích – đường dẫn đã hiện ở ô thư mục
         self.lbl_root.hide()
-        r2.addWidget(QLabel("Công cụ:"))
+        self.lbl_tools = QLabel("Công cụ:")
+        r2.addWidget(self.lbl_tools)
+        self.tool_btns = []                     # (nút, chữ đầy đủ) – màn hình hẹp chỉ hiện biểu tượng
         for text, slot, tip in (
                 ("📋 Kiểm tra đủ 5 file", self.open_check5, "Mỗi thư mục có PDF phải có đủ file 01. – 05."),
                 ("🪪 Thư mục CCCD", self.open_cccd, "Thư mục tên đúng 12 chữ số; xoá vào Thùng rác"),
                 ("📦 Copy nhóm file", self.open_copy, "Copy file .signed / không .signed ra thư mục mới, giữ cây thư mục")):
-            r2.addWidget(_btn(text, "light", slot, tip, "sm"))
+            b = _btn(text, "light", slot, f"{text[2:]} – {tip}", "sm")
+            self.tool_btns.append((b, text))
+            r2.addWidget(b)
         more = _btn("☰ Thêm", "light", None, "Mở thư mục nguồn, nhật ký, dữ liệu ứng dụng", "sm")
         m = QMenu(more)
         m.addAction("📂 Mở thư mục nguồn", self.open_root)
         m.addAction("📜 Nhật ký thao tác", self.show_log)
         m.addAction("🗂 Dữ liệu ứng dụng (bộ quy tắc, lịch sử)", lambda: open_path(paths.data_dir()))
+        m.addSeparator()
+        m.addAction("↺ Khôi phục cài đặt gốc", self.reset_settings)
         more.setMenu(m)
         r2.addWidget(more)
         cl.addLayout(r2)
@@ -164,7 +229,7 @@ class MainWindow(QMainWindow):
         # ---- các tab
         self.tabs = QTabWidget()
         self.overview = self._build_overview()
-        self.tabs.addTab(self.overview, "📊 Tổng quan")
+        self.tabs.addTab(_scrollable(self.overview), "📊 Tổng quan")
         self.rules1361 = Rules1361Panel()
         self.rules = RulesPanel()
         self.rules_tabs = QTabWidget()
@@ -179,35 +244,49 @@ class MainWindow(QMainWindow):
         self.rename.busy_check = self._busy_guard
         self.rename.renamed.connect(self.rescan)
         self.rename.editRulesRequested.connect(
-            lambda i: (self.tabs.setCurrentWidget(self.rules_wrap), self.rules_tabs.setCurrentIndex(i)))
+            lambda i: (self._show_tab(self.rules_wrap), self.rules_tabs.setCurrentIndex(i)))
         self.compress = CompressPanel()
         self.compress.release_cb = release_document
         self.compress.busyChanged.connect(lambda b: self._update_busy())
         self.compress.changed.connect(self.rescan)
         self.split = SplitPanel()
         self.split.saved.connect(self._split_saved)
+        self.split.helpRequested.connect(self.show_help)
+        self.check = CheckPanel()
+        self.check.release_cb = release_document
+        self.check.busyChanged.connect(lambda b: self._update_busy())
+        self.check.changed.connect(self.rescan)
+        self.check.helpRequested.connect(self.show_help)
         self.report = ReportPanel(lambda: self.rules1361.rules)
         self.report.busy_check = self._busy_guard
         self.report.renamed.connect(self.rescan)
         self.rules1361.rulesChanged.connect(self.report.refresh)
+        self.sign = SignPanel()
+        self.sign.busy_check = self._busy_guard
+        self.sign.busyChanged.connect(lambda b: self._update_busy())
+        self.sign.changed.connect(self.rescan)
         self.compare = ComparePanel(lambda: self.report.rep)
         self.compare.busy_check = self._busy_guard
         self.compare.changed.connect(self.rescan)
-        self.tabs.addTab(self.rename, "🏷 Đổi tên")
-        self.tabs.addTab(self.split, "✂ Tách trang")
-        self.tabs.addTab(self.compress, "⚡ Giảm dung lượng")
-        self.tabs.addTab(self.report, "📑 Báo cáo hồ sơ")
-        self.tabs.addTab(self.compare, "🔗 Đối chiếu danh sách")
-        self.tabs.addTab(self.rules_wrap, "⚙ Bộ quy tắc")
+        # mỗi tab nằm trong khung cuộn: màn hình nhỏ thì cuộn được, không bị cắt mất phần dưới
+        for page, title in ((self.rename, "🏷 Đổi tên"), (self.split, "✂ Tách trang"), (self.check, "🧭 Kiểm tra trang"),
+                            (self.compress, "⚡ Giảm dung lượng"), (self.report, "📑 Báo cáo hồ sơ"), (self.sign, "✍ Gom ký số"),
+                            (self.compare, "🔗 Đối chiếu danh sách"), (self.rules_wrap, "⚙ Bộ quy tắc")):
+            self.tabs.addTab(_scrollable(page), title)
         guide = QTextBrowser()
         guide.setOpenExternalLinks(True)
+        for kind in illustrations.KINDS:          # hình minh hoạ trong hướng dẫn: <img src="img:kind">
+            guide.document().addResource(QTextDocument.ImageResource, QUrl(f"img:{kind}"),
+                                         illustrations.image(kind, 340, 120))
         guide.setHtml(GUIDE_HTML)
+        self.guide = guide
         gw = QWidget()
         gl = QVBoxLayout(gw)
         gl.setContentsMargins(16, 10, 16, 10)
         gl.addWidget(guide)
         self.tabs.addTab(gw, "📖 Hướng dẫn")
         root.addWidget(self.tabs, 1)
+        self.tabs.currentChanged.connect(self._flush_pending)
 
         # ---- tiến trình + nhật ký
         bar = QHBoxLayout()
@@ -232,10 +311,104 @@ class MainWindow(QMainWindow):
         self.log_box.setFixedHeight(58)
         self.log_box.setPlaceholderText("Nhật ký thao tác sẽ hiển thị ở đây…")
         root.addWidget(self.log_box)
-        show_log = self.settings.value("show_log", "false") == "true"
-        self.log_box.setVisible(show_log)
-        self.btn_log.setChecked(show_log)
+        self.log_box.setVisible(False)
         self.btn_log.toggled.connect(self._toggle_log)
+
+    # ================================================================= lưu / khôi phục cài đặt
+    def _init_persist(self):
+        """Mọi lựa chọn trong các tab được lưu lại và mở lại đúng như lần trước (ui/persist.py)."""
+        p = Persist(self.settings)
+        p.bind("main", self, ["chk_rec", "combo", "btn_log"])
+        p.bind("rename", self.rename, ["ck_suffix", "ck_only"])
+        p.bind("split", self.split, ["cb_preset", "cb_mode", "sp_cut", "cb_order", "cb_arrange", "ck_first", "ck_last",
+                                     "cb_flip", "cb_rot", "cb_size", "ck_blank", "ck_open"])
+        p.bind("check", self.check, ["ck_rot", "ck_sort", "ck_blank", "ck_signed", "rb_new", "rb_over", "ck_backup"])
+        p.bind("compress", self.compress, ["sp", "ck_clean", "ck_signed", "rb_new", "rb_over", "ck_backup"])
+        p.bind("report", self.report, ["ed_req", "cb_sign", "ck_adv"])
+        p.bind("sign", self.sign, ["ck_hide", "rb_back", "rb_copy", "ck_full", "cb_batch", "sp_batch", "ck_verify",
+                                   "ck_watch", "ck_issue"])
+        # cài đặt cũ (trước v1.8)
+        if not self.settings.contains("ui/main/chk_rec") and self.settings.value("recursive") == "false":
+            self.chk_rec.setChecked(False)
+        if not self.settings.contains("ui/main/btn_log") and self.settings.value("show_log") == "true":
+            self.btn_log.setChecked(True)
+        p.restore()
+        self.persist = p
+        try:
+            tab = int(self.settings.value("ui/main/tab", 0))
+            if 0 <= tab < self.tabs.count():
+                self.tabs.setCurrentIndex(tab)
+        except (TypeError, ValueError):
+            pass
+        geo = self.settings.value("ui/main/geometry")
+        if geo is not None:
+            self.restoreGeometry(geo)
+
+    def reset_settings(self):
+        if QMessageBox.question(
+                self, "Khôi phục cài đặt gốc",
+                "Đưa mọi lựa chọn trong các tab (ô tích, kiểu tách, giới hạn KB, lưu / ghi đè…) và giao diện về "
+                "mặc định?\n\nKhông xoá dữ liệu: bộ quy tắc, lịch sử đổi tên, thư mục gần nhất, file Excel đối "
+                "chiếu.") != QMessageBox.Yes:
+            return
+        from PySide6.QtWidgets import QApplication
+        self.persist.reset()
+        self.split._sync_cards()
+        self.split._timer.start()
+        if styles.current()["name"] != "light":
+            styles.set_theme(QApplication.instance(), "light")
+            self._update_theme_btn()
+            self.preview.refresh()
+        self.settings.remove("theme")
+        self._log_line("Cài đặt", "Đã khôi phục cài đặt gốc")
+        self.status.setText("✔ Đã khôi phục cài đặt gốc.")
+
+    def show_help(self, anchor: str = ""):
+        self._show_tab(self.guide.parentWidget())
+        if anchor:
+            self.guide.scrollToAnchor(anchor)
+
+    def toggle_theme(self):
+        from PySide6.QtWidgets import QApplication
+        name = "light" if styles.current()["name"] == "dark" else "dark"
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.setUpdatesEnabled(False)               # áp kiểu cho hàng trăm widget rồi vẽ lại 1 lần
+        try:
+            styles.set_theme(QApplication.instance(), name)
+        finally:
+            self.setUpdatesEnabled(True)
+            QApplication.restoreOverrideCursor()
+        self.settings.setValue("theme", name)
+        self._update_theme_btn()
+        self.preview.refresh()
+
+    def _update_theme_btn(self):
+        dark = styles.current()["name"] == "dark"
+        self.btn_theme.setText("☀ Sáng" if dark else "🌙 Tối")
+        self.btn_theme.setToolTip("Chuyển sang giao diện " + ("sáng" if dark else "tối"))
+
+    def _show_tab(self, page: QWidget):
+        """Chuyển tới tab chứa `page` (các tab được bọc trong khung cuộn)."""
+        for i in range(self.tabs.count()):
+            w = self.tabs.widget(i)
+            if w is page or (isinstance(w, QScrollArea) and w.widget() is page):
+                self.tabs.setCurrentIndex(i)
+                return
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._apply_compact(self.width() < 1500)
+
+    def _apply_compact(self, compact: bool):
+        """Màn hình hẹp (laptop 1366 px, phóng to 125%): rút gọn chữ trên thanh cấu hình để không tràn."""
+        if getattr(self, "_compact", None) == compact:
+            return
+        self._compact = compact
+        self.sub_title.setVisible(not compact)
+        self.lbl_tools.setVisible(not compact)
+        self.chk_rec.setText("Quét thư mục con" if compact else "Quét tất cả thư mục con bên trong (Recursive Scan)")
+        for b, text in self.tool_btns:
+            b.setText(text.split(" ", 1)[0] if compact else text)
 
     def _build_overview(self) -> QWidget:
         # Bố cục kiểu Hồ sơ 1361: bên trái (thẻ + cây), bên phải cột xem trước hẹp, cao hết chiều dọc tab
@@ -322,20 +495,19 @@ class MainWindow(QMainWindow):
     # ================================================================= tiện ích chung
     @property
     def busy(self) -> bool:
-        return self.scanning or self.compress.running
+        return self.scanning or self.compress.running or self.check.running or self.sign.running
 
     def _update_busy(self):
         self.btn_scan.setEnabled(not self.busy)
 
     def _busy_guard(self) -> bool:
         if self.busy:
-            QMessageBox.information(self, "Đang xử lý", "Đang quét hoặc đang nén – hãy chờ xong rồi thao tác.")
+            QMessageBox.information(self, "Đang xử lý", "Đang quét, nén hoặc kiểm tra trang – hãy chờ xong rồi thao tác.")
             return True
         return False
 
     def _toggle_log(self, on: bool):
         self.log_box.setVisible(on)
-        self.settings.setValue("show_log", "true" if on else "false")
 
     def info(self, text: str, title: str = "Thông báo"):
         QMessageBox.information(self, title, text)
@@ -407,7 +579,6 @@ class MainWindow(QMainWindow):
             self.warn("Đường dẫn thư mục không hợp lệ.")
             return
         self.settings.setValue("last_folder", folder)
-        self.settings.setValue("recursive", "true" if self.chk_rec.isChecked() else "false")
         release_document()
         self.preview.clear()
         self.scanning = True
@@ -464,13 +635,31 @@ class MainWindow(QMainWindow):
         activity.log("Quét", f"{res.root} → {len(res.files)} file, {s.pages} trang")
 
     def _push_files(self):
-        """Đưa danh sách file (theo phạm vi + bộ lọc) sang các tab Đổi tên / Giảm dung lượng / Quy tắc."""
+        """Đưa danh sách file (theo phạm vi + bộ lọc) sang các tab Đổi tên / Kiểm tra / Giảm dung lượng / Quy tắc.
+        Chỉ tab ĐANG MỞ được nạp ngay; tab khác nạp khi người dùng chuyển tới (đổi bộ lọc / phạm vi với hàng nghìn
+        file không phải dựng lại mọi bảng → không bị khựng)."""
         files = self._scoped_files() if self.result else []
         label = self._scope_label() + FILTER_SHORT[self.mode]
-        self.rename.set_files(files, label)
-        self.compress.set_files(files, self.result.root if self.result else "", label)
-        self.rules.set_sample_files(files)
-        self.split.set_files(files)
+        root = self.result.root if self.result else ""
+        self.split.set_files(files)                       # nhẹ (chỉ lưu danh sách)
+        self._pending = {
+            self.rename: lambda: self.rename.set_files(files, label),
+            self.compress: lambda: self.compress.set_files(files, root, label),
+            self.check: lambda: self.check.set_files(files, root, label),
+            self.sign: lambda: self.sign.set_files(files, root, label),
+            self.rules_wrap: lambda: self.rules.set_sample_files(files),
+        }
+        self._flush_pending()
+
+    def _flush_pending(self, *_):
+        pending = getattr(self, "_pending", None)
+        if not pending:
+            return
+        cur = self.tabs.currentWidget()
+        page = cur.widget() if isinstance(cur, QScrollArea) else cur
+        fn = pending.pop(page, None)
+        if fn:
+            fn()
 
     # ================================================================= cây thư mục
     def build_tree(self):
@@ -581,13 +770,13 @@ class MainWindow(QMainWindow):
             m.addAction("📄 Mở file", lambda: open_path(val.path))
             m.addAction("📂 Mở thư mục chứa", lambda: reveal(val.path))
             m.addAction("✂ Tách trang file này", lambda: (self.split.load_file(val.path),
-                                                         self.tabs.setCurrentWidget(self.split)))
+                                                         self._show_tab(self.split)))
             m.addAction("📋 Sao chép đường dẫn", lambda: QGuiApplication.clipboard().setText(val.path))
         else:
             full = os.path.join(self.result.root, val)
             m.addAction("📊 Thống kê riêng thư mục này", lambda: self._set_scope(val))
             m.addAction("🏷 Đổi tên file trong thư mục này",
-                        lambda: (self._set_scope(val), self.tabs.setCurrentWidget(self.rename)))
+                        lambda: (self._set_scope(val), self._show_tab(self.rename)))
             m.addAction("📂 Mở thư mục", lambda: open_path(full))
             m.addAction("📋 Sao chép đường dẫn", lambda: QGuiApplication.clipboard().setText(full))
         m.exec(self.tree.viewport().mapToGlobal(pos))
@@ -736,12 +925,15 @@ class MainWindow(QMainWindow):
                    ["Thời gian", "Thao tác", "Chi tiết"], rows, widths=[160, 200, 560]).exec()
 
     def closeEvent(self, e):
-        if self.compress.running:
-            QMessageBox.information(self, "Đang nén", "Đang nén PDF – hãy bấm Dừng và chờ xong trước khi thoát.")
+        if self.compress.running or self.check.running or self.sign.running:
+            QMessageBox.information(self, "Đang xử lý", "Đang nén / kiểm tra PDF – hãy bấm Dừng và chờ xong trước khi thoát.")
             e.ignore()
             return
         if self.thread and self.thread.isRunning():
             self.thread.cancel_ev.set()
             self.thread.wait(3000)
+        self.persist.save()
+        self.settings.setValue("ui/main/tab", self.tabs.currentIndex())
+        self.settings.setValue("ui/main/geometry", self.saveGeometry())
         release_document()
         super().closeEvent(e)

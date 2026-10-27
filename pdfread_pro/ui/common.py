@@ -5,12 +5,45 @@ import os
 import subprocess
 from typing import Callable, List, Optional, Sequence
 
-from PySide6.QtCore import QUrl, Qt
+from PySide6.QtCore import QThread, QUrl, Qt, Signal
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                                QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
 from ..core.models import FileInfo
+
+
+class BgTask(QThread):
+    """Chạy fn() ở luồng phụ – chỉ cho việc KHÔNG đụng widget / PyMuPDF (vd ghi file Excel) → giao diện không đứng."""
+    done = Signal(object, object)            # kết quả, lỗi (Exception hoặc None)
+
+    def __init__(self, fn: Callable, parent=None):
+        super().__init__(parent)
+        self.fn = fn
+
+    def run(self):
+        try:
+            self.done.emit(self.fn(), None)
+        except Exception as e:               # báo lỗi về luồng giao diện
+            self.done.emit(None, e)
+
+
+def run_bg(owner, button: QPushButton, busy_text: str, fn: Callable, on_done: Callable) -> BgTask:
+    """Chạy fn ở luồng phụ; nút `button` tạm khoá + hiện `busy_text`; xong gọi on_done(kết quả, lỗi) ở luồng giao diện."""
+    old = button.text()
+    button.setEnabled(False)
+    button.setText(busy_text)
+    t = BgTask(fn, owner)
+
+    def finish(res, err):
+        button.setText(old)
+        button.setEnabled(True)
+        on_done(res, err)
+    t.done.connect(finish)
+    t.finished.connect(t.deleteLater)
+    owner._bg_task = t                       # giữ tham chiếu tới khi chạy xong
+    t.start()
+    return t
 
 
 def fmt(n) -> str:

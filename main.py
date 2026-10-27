@@ -61,6 +61,24 @@ def selftest(out_path: str) -> int:
             n = pagenum.read_pages([Image.frombytes("L", (pix.width, pix.height), pix.samples)], 20)[0]
             lines.append(f"đọc số trang (Windows OCR): {n}")
             ok &= n == (7, None)
+            from pdfread_pro.core import pagecheck
+            lines_txt = "Ho va ten khai sinh Nguyen Van A que quan noi o hien nay"
+            d = pymupdf.open()
+            for num, rot in ((2, 0), (1, 180)):
+                pg = d.new_page(width=420, height=595)
+                for k in range(12):
+                    pg.insert_text((40, 120 + 30 * k), lines_txt, fontsize=12)
+                pg.insert_text((200, 575), f"- {num} -", fontsize=12)
+                pg.set_rotation(rot)
+            ck = os.path.join(work, "kiem_tra.pdf")
+            d.save(ck)
+            with ProcessPoolExecutor(max_workers=1) as ex:
+                cr = ex.submit(pagecheck.job_check, (ck,)).result()
+            plan = pagecheck.make_plan(cr.pages)
+            lines.append(f"kiểm tra trang (tiến trình con): {[(p.angle, p.number) for p in cr.pages]} → "
+                         f"thứ tự {plan.order}, xoay {plan.rotate}")
+            ok &= plan.order == [1, 0] and plan.rotate == {1: 180} and \
+                pagecheck.job_fix((ck, ck, plan.order, plan.rotate, False)) == ""
         else:
             lines.append("đọc số trang: máy không có Windows OCR – bỏ qua")
         from pdfread_pro.core import report as RP, scanner as SC
@@ -99,8 +117,11 @@ def main() -> int:
     from PySide6.QtGui import QFont, QIcon
     from PySide6.QtWidgets import QApplication
     from pdfread_pro import paths
+    from PySide6.QtCore import QSettings
+    from pdfread_pro.ui import theme
+    from pdfread_pro.ui.styles import set_theme
+    theme.install()                          # bọc hàm đặt màu trước khi dựng giao diện (giao diện tối)
     from pdfread_pro.ui.main_window import MainWindow
-    from pdfread_pro.ui.styles import apply_light_palette, full_style
 
     if sys.platform == "win32":
         try:                                 # để thanh taskbar hiện icon của app thay vì icon Python/Qt mặc định
@@ -113,11 +134,10 @@ def main() -> int:
     if os.path.isfile(paths.icon_path()):
         app.setWindowIcon(QIcon(paths.icon_path()))
     app.setStyle("Fusion")
-    apply_light_palette(app)
     font = QFont("Segoe UI")
     font.setPointSizeF(9.5)
     app.setFont(font)
-    app.setStyleSheet(full_style())
+    set_theme(app, QSettings("PDFReadPro", "PDFReadPro").value("theme", "light"))
     win = MainWindow()
     win.showMaximized()
     if len(sys.argv) > 1 and os.path.isdir(sys.argv[1]):

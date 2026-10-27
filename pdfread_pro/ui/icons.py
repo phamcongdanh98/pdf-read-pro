@@ -26,13 +26,14 @@ def _painter(img: QImage) -> QPainter:
     return p
 
 
-def _checkbox(checked: bool, disabled: bool = False) -> QImage:
+def _checkbox(checked: bool, disabled: bool = False, t: dict | None = None) -> QImage:
+    t = t or {}
     img = _canvas(18, 18)
     p = _painter(img)
     r = QRectF(1, 1, 16, 16)
     if checked:
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor("#CBD5E1" if disabled else "#2563EB"))
+        p.setBrush(QColor(t.get("arrow_dis", "#CBD5E1") if disabled else t.get("primary", "#2563EB")))
         p.drawRoundedRect(r, 4, 4)
         pen = QPen(QColor("#FFFFFF"), 2.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
         p.setPen(pen)
@@ -41,22 +42,23 @@ def _checkbox(checked: bool, disabled: bool = False) -> QImage:
         path.lineTo(13.4, 5.8)
         p.drawPath(path)
     else:
-        p.setPen(QPen(QColor("#CBD5E1" if disabled else "#94A3B8"), 1.4))
-        p.setBrush(QColor("#F1F5F9" if disabled else "#FFFFFF"))
+        p.setPen(QPen(QColor(t.get("arrow_dis", "#CBD5E1") if disabled else t.get("chk_border", "#94A3B8")), 1.4))
+        p.setBrush(QColor(t.get("chk_dis", "#F1F5F9") if disabled else t.get("chk_box", "#FFFFFF")))
         p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
     p.end()
     return img
 
 
-def _radio(checked: bool) -> QImage:
+def _radio(checked: bool, t: dict | None = None) -> QImage:
+    t = t or {}
     img = _canvas(18, 18)
     p = _painter(img)
-    p.setPen(QPen(QColor("#2563EB" if checked else "#94A3B8"), 1.5))
-    p.setBrush(QColor("#FFFFFF"))
+    p.setPen(QPen(QColor(t.get("primary", "#2563EB") if checked else t.get("chk_border", "#94A3B8")), 1.5))
+    p.setBrush(QColor(t.get("chk_box", "#FFFFFF")))
     p.drawEllipse(QRectF(1.5, 1.5, 15, 15))
     if checked:
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor("#2563EB"))
+        p.setBrush(QColor(t.get("primary", "#2563EB")))
         p.drawEllipse(QRectF(5, 5, 8, 8))
     p.end()
     return img
@@ -74,16 +76,18 @@ def _arrow(direction: str, color: str = "#475569") -> QImage:
     return img
 
 
-def ensure_icons() -> dict:
-    """Tạo (một lần) và trả về {tên: đường dẫn dạng / cho QSS}."""
-    d = os.path.join(paths.data_dir(), "ui_icons", _VERSION)
+def ensure_icons(t: dict | None = None) -> dict:
+    """Tạo (một lần cho mỗi giao diện) và trả về {tên: đường dẫn dạng / cho QSS}."""
+    t = t or {}
+    d = os.path.join(paths.data_dir(), "ui_icons", _VERSION + ("" if t.get("name", "light") == "light" else "_" + t["name"]))
     os.makedirs(d, exist_ok=True)
     makers = {
-        "chk_off": lambda: _checkbox(False), "chk_on": lambda: _checkbox(True),
-        "chk_off_dis": lambda: _checkbox(False, True), "chk_on_dis": lambda: _checkbox(True, True),
-        "radio_off": lambda: _radio(False), "radio_on": lambda: _radio(True),
-        "arrow_down": lambda: _arrow("down"), "arrow_up": lambda: _arrow("up"),
-        "arrow_down_dis": lambda: _arrow("down", "#CBD5E1"),
+        "chk_off": lambda: _checkbox(False, t=t), "chk_on": lambda: _checkbox(True, t=t),
+        "chk_off_dis": lambda: _checkbox(False, True, t), "chk_on_dis": lambda: _checkbox(True, True, t),
+        "radio_off": lambda: _radio(False, t), "radio_on": lambda: _radio(True, t),
+        "arrow_down": lambda: _arrow("down", t.get("arrow", "#475569")),
+        "arrow_up": lambda: _arrow("up", t.get("arrow", "#475569")),
+        "arrow_down_dis": lambda: _arrow("down", t.get("arrow_dis", "#CBD5E1")),
     }
     out = {}
     for name, make in makers.items():
@@ -94,8 +98,8 @@ def ensure_icons() -> dict:
     return out
 
 
-def icon_style() -> str:
-    i = ensure_icons()
+def icon_style(t: dict | None = None) -> str:
+    i = ensure_icons(t)
     return f"""
 QCheckBox::indicator, QTableWidget::indicator, QTreeWidget::indicator, QListWidget::indicator {{ width: 18px; height: 18px; }}
 QCheckBox::indicator:unchecked, QTableWidget::indicator:unchecked, QListWidget::indicator:unchecked {{ image: url("{i['chk_off']}"); }}

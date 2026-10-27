@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFileDia
 
 from ..core import activity, report as R
 from ..core.models import ScanResult
-from .common import fmt, open_path
+from .common import fmt, open_path, run_bg
 from .styles import button
 from .widgets import StatCard
 
@@ -452,17 +452,21 @@ class ReportPanel(QWidget):
         if not path:
             return
         from ..core.report_excel import export_excel
-        try:
-            out = export_excel(self.rep, os.path.normpath(path), advanced=self.ck_adv.isChecked())
-        except PermissionError:
+        rep, dst, adv = self.rep, os.path.normpath(path), self.ck_adv.isChecked()
+        # ghi Excel hàng nghìn dòng ở luồng phụ → giao diện không đứng
+        run_bg(self, self.btn_excel, "⏳ Đang xuất Excel…", lambda: export_excel(rep, dst, advanced=adv),
+               lambda out, err: self._exported(rep, out, err))
+
+    def _exported(self, rep, out, err):
+        if isinstance(err, PermissionError):
             QMessageBox.warning(self, "Không lưu được", "File đang mở trong Excel – hãy đóng file rồi thử lại.")
             return
-        except OSError as e:
-            QMessageBox.warning(self, "Không lưu được", f"❌ {e}")
+        if err is not None:
+            QMessageBox.warning(self, "Không lưu được", f"❌ {err}")
             return
-        ok = sum(1 for d in self.rep.dossiers if d.complete)
-        activity.log("Báo cáo hồ sơ", f"{os.path.basename(out)} – {len(self.rep.dossiers)} hồ sơ, đủ {ok}, "
-                                      f"thiếu {len(self.rep.dossiers) - ok}")
+        ok = sum(1 for d in rep.dossiers if d.complete)
+        activity.log("Báo cáo hồ sơ", f"{os.path.basename(out)} – {len(rep.dossiers)} hồ sơ, đủ {ok}, "
+                                      f"thiếu {len(rep.dossiers) - ok}")
         if QMessageBox.question(self, "Đã xuất báo cáo", f"🎉 Đã lưu báo cáo:\n{out}\n\nMở file ngay?") == QMessageBox.Yes:
             open_path(out)
 
