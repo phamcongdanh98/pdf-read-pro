@@ -83,7 +83,7 @@ cả xấp có bị ngược không. Không cần đặt sổ đúng 1 chiều c
 cam = cần xem lại). Trang không in số vẫn được xếp đúng nếu đa số trang khác đọc được.</li>
 <li>Tuỳ chọn: thứ tự nửa trang, xoay sau khi cắt, chuẩn hoá khổ A4, phạm vi trang scan, <b>bỏ trang trắng</b> (chỉ bỏ trang gần như trắng tinh, có liệt kê vị trí).</li>
 <li><b>Lưu</b>: mặc định ra file mới <code>…_DaTach.pdf</code> cạnh file gốc (không bao giờ ghi đè); ô <b>Trang xuất</b> để xuất trang chỉ định (VD <code>1-4, 7</code>);
-<b>Lưu đè file gốc</b> có sao lưu vào <code>_backup_goc</code>. File có chữ ký số: file tách ra không còn chữ ký hợp lệ (app cảnh báo).</li>
+<b>Lưu đè file gốc</b> có sao lưu vào <b>Thùng rác của app</b> (không nằm trong thư mục hồ sơ). File có chữ ký số: file tách ra không còn chữ ký hợp lệ (app cảnh báo).</li>
 </ul>
 
 <a name="check"></a><h3 style="color:#1D4ED8">5b. Tab Kiểm tra trang</h3>
@@ -91,10 +91,20 @@ cam = cần xem lại). Trang không in số vẫn được xếp đúng nếu �
 <ul>
 <li>Bấm <b>🔍 Kiểm tra</b> (giữ Ctrl khi bấm: chỉ file đang chọn). App đọc chữ và số trang in ở đầu / chân trang
 bằng Windows OCR, báo: trang <b>ngược</b> / <b>nằm ngang</b>, <b>sai thứ tự</b>, <b>thiếu số</b>, <b>trùng số</b>, <b>trang trắng</b>.</li>
+<li><b>Chuột phải vào dòng</b>: menu việc riêng của dòng (cập nhật / kiểm tra lại / sửa riêng / xoá trang trắng + đen / khôi phục bản gốc / đánh dấu đã xử lý…) và việc chung (mở file, mở thư mục, sao chép). <b>▦ Cột</b>: chọn cột hiển thị (cũng chuột phải vào tiêu đề cột), nhớ cho lần sau.</li>
+<li><b>Bản sao lưu</b> nằm ở <code>%APPDATA%\PDFReadPro\backup</code>, <b>không</b> còn lẫn trong thư mục hồ sơ; đổi nơi lưu ở tab 🗑 Thùng rác. Thư mục <code>_backup_goc</code> cũ: menu 🧰 Công cụ → <b>📦 Dọn thư mục _backup_goc cũ</b>.</li>
+<li><b>Xoá ngay hay đánh dấu</b>: ô <b>«Nút 🗑 / Delete»</b> trên bảng chi tiết trang – <b>Xoá ngay</b> (mặc định) xoá luôn khỏi file; <b>Chỉ đánh dấu xoá</b> gạch đỏ rồi xoá khi bấm Sửa tự động. Trạng thái từng file có màu riêng; file đã xử lý (sửa / xoá trang / cắt viền) <b>tô nền xanh lá</b>, và chuyển được «Bản gốc» ↔ «Bản đã sửa» ở khung xem trước.</li>
+<li><b>🗑 Xoá trang</b>: nút ở khung xem trước (mọi tab) hoặc phím <b>Delete</b>. Bỏ tích <b>«Hỏi xác nhận trước khi xoá / cắt»</b> nếu muốn xoá ngay (file đã ký số vẫn hỏi). Xoá xong hiện thanh <b>↩ Hoàn tác</b>; trang xoá + bản gốc nằm trong <b>🗑 Thùng rác</b> (thanh dưới cùng) để khôi phục sau.</li>
+<li><b>✂ Cắt viền</b>: bấm <b>✂ Cắt viền</b> dưới khung xem trước → kéo khung (4 góc / 4 cạnh, kéo bên trong để dời) → <b>Cắt trang này</b> hoặc <b>Cắt mọi trang</b>. Không nén lại ảnh; có sao lưu và hoàn tác.</li>
+<li><b>Tốc độ</b>: đọc OCR song song nhiều trang + nhiều tiến trình (nhanh gấp ~2 lần, kết quả y hệt). File không đổi từ lần kiểm tra trước dùng lại kết quả đã lưu (hiện ♻) nên kiểm tra lại gần như tức thì; muốn làm lại từ đầu: giữ <b>Ctrl</b> khi bấm Kiểm tra (file đang chọn).</li>
+<li><b>Chọn kiểm tra gì</b>: tích riêng từng mục (⬜ trắng, ⬛ đen, 🔄 ngược / ngang, 🔢 số trang, 🌫 mờ, 📐 khổ lệch, ⧉ trùng) hoặc dùng <b>☑ Chọn nhanh</b>. Chỉ tích trắng / đen / mờ / khổ / trùng → <b>không cần OCR</b>, chạy rất nhanh. Phần <b>Tự sửa</b> chỉ mở khi mục kiểm tra tương ứng đang bật.</li>
+<li><b>Thanh Hiển thị · Sắp xếp · Tìm</b> phía trên bảng (có cả ở tab Tổng quan, Đổi tên, Nén PDF): chỉ xem file lỗi / có vấn đề / cần sửa / đạt, file có trang trắng / đen / ngược…, và sắp theo tên, số trang, dung lượng, “vấn đề lên trước”.</li>
+<li>Cột <b>Nội dung</b> báo: ⬜ trắng, ⬛ đen (kèm % đen, ngưỡng chỉnh được), ◼ ảnh tối có chi tiết, ▫ rất ít nội dung, 🌫 có thể mờ, 📐 khổ giấy lệch, ⧉ trùng nội dung. Tích <b>Bỏ trang trắng</b> / <b>Bỏ trang đen</b> để tự xoá khi sửa (ảnh tối có chi tiết và trang ít nội dung không bị xoá).</li>
+<li><b>Xoá trang</b>: chọn trang (Ctrl / Shift để chọn nhiều) → <b>🗑 Đánh dấu xoá</b> hoặc phím <b>Delete</b>; <b>☑ Chọn nhanh</b> đánh dấu mọi trang trắng / đen / trùng / mờ. Trang đánh dấu bị gạch đỏ và chỉ xoá thật khi bấm <b>Sửa tự động</b>.</li>
 <li>Bấm 1 file để xem <b>Chi tiết từng trang</b> (số in đọc được, hướng, đề xuất sửa); bấm 1 trang để xem trang đó bên phải.
 Đọc sai số: bấm đôi ô <b>Số in</b> để sửa; sai hướng: chuột phải vào trang.</li>
 <li><b>🛠 Sửa tự động</b>: xoay đúng chiều, sắp xếp theo số trang, (tuỳ chọn) bỏ trang trắng – không nén lại ảnh.
-Mặc định lưu sang thư mục mới; ghi đè có sao lưu <code>_backup_goc</code>. Bỏ qua file đã ký số.</li>
+Mặc định lưu sang thư mục mới; ghi đè có sao lưu vào Thùng rác của app. Bỏ qua file đã ký số.</li>
 <li>File có số trùng (ghép nhiều văn bản) hoặc đọc được quá ít số sẽ <b>không tự sắp xếp</b> – app báo “Cần xem lại”.</li>
 </ul>
 
@@ -107,7 +117,7 @@ nặng nhất và số trang vượt.</li>
 <li><b>Xem trước</b> bên phải: bấm 1 file để xem; nén xong bấm <b>Bản gốc</b> / <b>Bản đã nén</b> để so độ rõ của chữ
 (giữ đúng trang đang xem). Bấm đôi để mở bằng phần mềm đọc PDF.</li>
 <li>Mặc định <b>lưu sang thư mục mới</b> (giữ nguyên file gốc) và <b>bỏ qua file đã ký số</b> (nén làm mất hiệu lực chữ ký).</li>
-<li>Ghi đè file gốc: có tuỳ chọn sao lưu bản gốc vào <code>_backup_goc</code>.</li>
+<li>Ghi đè file gốc: có tuỳ chọn sao lưu bản gốc vào Thùng rác của app.</li>
 <li>Chỉ nén được ảnh; file toàn chữ/vector báo “Không có ảnh để nén”.</li>
 </ul>
 
@@ -217,6 +227,10 @@ Ngoài danh sách · Cần sửa · Giải thích.</li>
 
 <h2 style="color:#1E40AF;margin-top:18px">📋 Lịch sử phiên bản</h2>
 <ul>
+<li><b>1.9.1 (cập nhật 3)</b> – <b>Chọn cột hiển thị</b> + <b>menu chuột phải theo dòng</b> cho các bảng; tô <b>cả hàng</b> theo trạng thái; bỏ «Cắt mọi trang», hoàn tác cắt nhiều bước; <b>bản sao lưu chuyển ra nơi sao lưu của app</b> (hết rối thư mục hồ sơ) + công cụ dọn <code>_backup_goc</code> cũ.</li>
+<li><b>1.9.1 (cập nhật 2)</b> – Kiểm tra trang: nút <b>🗑 Xoá trang</b> xoá ngay (hoặc chỉ đánh dấu – tuỳ chọn), cột Trạng thái <b>mỗi tình trạng một màu</b>, dòng đã xử lý tô xanh lá, «Bản gốc / Bản đã sửa» dùng được sau khi xoá / cắt; <b>🗑 Thùng rác thành tab riêng</b> (giữa Quy tắc và Hướng dẫn); xoá / cắt chỉ cập nhật đúng dòng, không quét lại cả thư mục; test không còn đụng cài đặt thật của người dùng.</li>
+<li><b>1.9.1 (cập nhật)</b> – <b>🗑 Thùng rác</b> (trang đã xoá + bản gốc trước khi sửa: xem, khôi phục, xoá hẳn, tự dọn); nút xoá trang <b>không cần xác nhận</b> (tuỳ chọn, vẫn hoàn tác được); <b>✂ Cắt viền</b> kéo khung ở khung xem trước; nút <b>Aa</b> chỉnh <b>cỡ chữ / chữ đậm</b> (mặc định lớn + đậm hơn); trả lại nút <b>🧹 Làm sạch</b>; sửa lỗi bảng chi tiết trang không cuộn chuột được khi đang kiểm tra.</li>
+<li><b>1.9.1</b> – Tab <b>Kiểm tra trang</b> nhận dạng chuẩn hơn: trang <b>trắng</b> (đo theo màu nền, scan ám xám vẫn nhận), trang <b>đen</b> (ngưỡng chỉnh được, phân biệt ảnh tối có chi tiết), rất ít nội dung, <b>mờ</b>, <b>khổ giấy lệch</b>, <b>trùng nội dung</b>; tuỳ chọn bỏ trang đen, bảng trang có bộ lọc + chọn nhanh; <b>chọn từng kiểm tra</b> (chỉ trắng / đen thì không chạy OCR); <b>thanh Hiển thị · Sắp xếp · Tìm</b> ở các tab Tổng quan, Đổi tên, Nén PDF, Kiểm tra trang; kiểm tra trang <b>nhanh gấp ~2 lần</b> (OCR song song, nhiều tiến trình) và <b>nhớ kết quả</b> file không đổi. Nút <b>🗑 Xoá trang này</b> ở khung xem trước (mọi tab có xem trước): hỏi xác nhận, sao lưu <code>_backup_goc</code>, cảnh báo file đã ký số.</li>
 <li><b>1.9.0</b> – Tab mới <b>Quy trình</b>: 1 click chạy tuần tự <b>đổi tên → giảm dung lượng (250 KB/trang) → gom file
 chưa ký để ký số</b> trên bản chép (hồ sơ gốc không bị sửa), kiểm tra trước + xác nhận, tự khôi phục file nén lỗi, dừng được
 bất cứ lúc nào, bảng kết quả + xuất Excel, bàn giao sang tab Gom ký số. Sổ gom ghi thư mục gốc nên chép ra thư mục mới giữ

@@ -15,9 +15,12 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFileDialog, QGroup
                                QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..core import activity, compressor as C
+from ..core.trash import find_backup
 from ..core.models import FileInfo
 from .common import fmt, fmt_size
+from .filterbar import FILTER_ALL, SORT_ORIG, FilterBar
 from .preview import PreviewPane, make_collapsible
+from .tablekit import install_column_chooser, install_row_menu
 
 DEFAULT_LIMIT_KB = 250     # mặc định 250 KB/trang (chữ scan 300 dpi vẫn rõ – xem README)
 
@@ -63,6 +66,7 @@ class Worker(QThread):
 class CompressPanel(QWidget):
     COLS = ["STT", "Tên file", "Thư mục", "Trang", "Trang nặng nhất", "Trang vượt", "Dung lượng", "Trạng thái"]
     changed = Signal()
+    refreshRequested = Signal(str)
     busyChanged = Signal(bool)
 
     def __init__(self, parent: Optional[QWidget] = None):
@@ -113,7 +117,7 @@ class CompressPanel(QWidget):
         self.rb_new.setChecked(True)
         row.addWidget(self.rb_new)
         row.addWidget(self.rb_over)
-        self.ck_backup = QCheckBox("Sao lưu bản gốc vào _backup_goc")
+        self.ck_backup = QCheckBox("Sao lưu bản gốc (vào Thùng rác của app)")
         self.ck_backup.setChecked(True)
         row.addWidget(self.ck_backup)
         row.addStretch(1)
@@ -138,6 +142,17 @@ class CompressPanel(QWidget):
         lay.addWidget(cfg)
         self.rb_new.toggled.connect(self.mode_changed)
 
+        self.fbar = FilterBar(
+            [("Tất cả", FILTER_ALL), ("⚠ Cần nén (còn trang vượt)", "need"), ("✔ Đã đạt chuẩn", "ok"),
+             ("🟠 Chưa đạt / không nén được", "partial"), ("🔏 Bỏ qua (đã ký số)", "skipped"),
+             ("❌ Lỗi / có mật khẩu", "error"), ("⏳ Chưa phân tích", "pending"),
+             ("⚠ Có vấn đề (mọi loại)", "problem")],
+            [("Thứ tự gốc", SORT_ORIG, False), ("Tên file A → Z", "name", False), ("Thư mục A → Z", "dir", False),
+             ("Số trang nhiều → ít", "pages", True), ("Dung lượng lớn → nhỏ", "size", True),
+             ("Trang nặng nhất lớn → nhỏ", "heavy", True), ("Số trang vượt nhiều → ít", "over", True),
+             ("Vấn đề lên trước", "problem", False)])
+        self.fbar.changed.connect(self.apply_filter)
+        lay.addWidget(self.fbar)
         self.table = QTableWidget(0, len(self.COLS))
         self.table.setHorizontalHeaderLabels(self.COLS)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -154,6 +169,9 @@ class CompressPanel(QWidget):
         self.table.itemSelectionChanged.connect(self.show_selected)
         self.table.cellDoubleClicked.connect(lambda r, c: self.preview.open_external())
         lay.addWidget(self.table, 1)
+        install_column_chooser(self.table, "compress", (1,))
+        self.fbar.attach_columns(self.table, "compress", (1,))
+        install_row_menu(self.table, self._paths_of_rows, self._row_extras)
 
         # ---- xem trước: bản gốc ↔ bản đã nén (so độ rõ của chữ trước / sau khi nén)
         pbox = QGroupBox("Xem trước file PDF")
@@ -193,7 +211,7 @@ class CompressPanel(QWidget):
         self.btn_an = QPushButton("🔍 Phân tích")
         self.btn_an.setToolTip("Phân tích dung lượng từng trang, đếm trang vượt giới hạn")
         self.btn_an.setObjectName("cyan")
-        self.btn_an.clicked.connect(self.analyze)
+        self.btn_an.clicked.connect(lambda: self.analyze())
         self.btn_stop = QPushButton("■ Dừng")
         self.btn_stop.setObjectName("danger")
         self.btn_stop.clicked.connect(self.stop)
@@ -201,7 +219,7 @@ class CompressPanel(QWidget):
         self.btn_go = QPushButton("⚡ BẮT ĐẦU NÉN")
         self.btn_go.setObjectName("success")
         self.btn_go.setProperty("size", "lg")
-        self.btn_go.clicked.connect(self.compress)
+        self.btn_go.clicked.connect(lambda: self.compress())
         for w in (self.btn_an, self.btn_stop, self.btn_go):
             bot.addWidget(w)
         lay.addLayout(bot)
@@ -226,6 +244,7 @@ class CompressPanel(QWidget):
             self.memory.clear()
             base = root.rstrip(os.sep)
             self.out_edit.setText(os.path.join(os.path.dirname(base), os.path.basename(base) + " - Đã nén"))
+        self.fbar.restore_order(self.table)
         self.files, self.root = files, root
         self.lbl_scope.setText(f"Phạm vi: <b>{scope_label}</b> · {fmt(len(files))} file")
         self.table.setRowCount(len(files))
@@ -245,11 +264,87 @@ class CompressPanel(QWidget):
         self.lbl.setText(f"{fmt(len(files))} file trong phạm vi. Bấm “Phân tích” để xem trang vượt giới hạn, "
                          "hoặc bắt đầu nén luôn." if files else "Không có file nào trong phạm vi.")
         self._enable_actions()
+        self.apply_filter()
         self.show_selected()
+
+    def _paths_of_rows(self, rows):
+        return [self.files[r].path for r in rows if 0 <= r < len(self.files)]
+
+    def _row_extras(self, rows):
+        if not rows or not 0 <= rows[0] < len(self.files):
+            return []
+        f = self.files[rows[0]]
+        busy = self.running
+        return [
+            ("🔄 Cập nhật dòng này (đọc lại file + phân tích lại)", lambda: self.refresh_rows(rows), not busy),
+            ("📊 Phân tích lại riêng file này", lambda: self.analyze(rows), not busy and not f.error),
+            ("⚡ Nén riêng file này", lambda: self.compress(rows), not busy and not f.error),
+        ]
+
+    def refresh_rows(self, rows):
+        for r in rows:
+            if 0 <= r < len(self.files):
+                self.refreshRequested.emit(self.files[r].path)
+        self.analyze(rows)
+
+    def run_for_path(self, path: str, compress: bool = False) -> bool:
+        for i, f in enumerate(self.files):
+            if os.path.normcase(f.path) == os.path.normcase(path):
+                self.table.selectRow(i)
+                (self.compress if compress else self.analyze)([i])
+                return True
+        return False
+
+    def refresh_file(self, f: FileInfo) -> None:
+        """File vừa bị sửa tại chỗ (xoá trang / cắt viền): cập nhật số trang + dung lượng của dòng, bỏ kết quả phân tích cũ."""
+        for r, x in enumerate(self.files):
+            if x is f or os.path.normcase(x.path) == os.path.normcase(f.path):
+                self.memory.pop(x.path, None)
+                self._set(r, 3, f.pages if f.pages is not None else "—")
+                self._set(r, 4, "")
+                self._set(r, 5, "")
+                self._set(r, 6, fmt_size(f.size))
+                self._set(r, 7, "Chưa phân tích")
+                self.apply_filter()
+                return
+
+    # ------------------------------------------------------------------ lọc / sắp xếp
+    def _info(self, row: int):
+        f = self.files[row]
+        tags, mode_res = set(), self.memory.get(f.path)
+        over = heavy = 0
+        if f.error:
+            tags.add("error")
+        elif mode_res:
+            mode, r = mode_res
+            over = r.over_after if mode == "compress" else r.over_before
+            heavy = r.max_after_kb if mode == "compress" else r.max_before_kb
+            if r.status in (C.ST_ERROR, C.ST_ENCRYPTED):
+                tags.add("error")
+            elif r.status in (C.ST_PARTIAL, C.ST_NO_IMAGE, C.ST_NO_GAIN):
+                tags.add("partial")
+            elif over:
+                tags.add("need")
+            else:
+                tags.add("ok")
+        elif self._skipped(f):
+            tags.add("skipped")
+        else:
+            tags.add("pending")
+        if tags & {"error", "partial", "need"}:
+            tags.add("problem")
+        rank = 0 if "error" in tags else 1 if "partial" in tags else 2 if "need" in tags else 3 if "pending" in tags else 4
+        return tags, f"{f.name} {f.dir_rel}".lower(), {
+            "name": f.name.lower(), "dir": f.dir_rel.lower(), "pages": f.pages or 0, "size": f.size, "heavy": heavy,
+            "over": over, "problem": rank}
+
+    def apply_filter(self, *_):
+        if self.files:
+            self.fbar.apply(self.table, len(self.files), self._info)
 
     # ------------------------------------------------------------------ xem trước
     def _paths_of(self, row: int) -> Tuple[str, str]:
-        """(file gốc, file đã nén) của dòng `row`; '' nếu chưa có. Ghi đè có sao lưu → gốc nằm ở _backup_goc."""
+        """(file gốc, file đã nén) của dòng `row`; '' nếu chưa có. Ghi đè có sao lưu → gốc nằm trong thư mục sao lưu của app."""
         if not 0 <= row < len(self.files):
             return "", ""
         f = self.files[row]
@@ -259,8 +354,7 @@ class CompressPanel(QWidget):
                 and os.path.isfile(r.out_path):
             comp = r.out_path
             if os.path.normcase(os.path.abspath(r.out_path)) == os.path.normcase(os.path.abspath(f.path)):
-                bak = os.path.join(os.path.dirname(f.path), "_backup_goc", os.path.basename(f.path))
-                orig = bak if os.path.isfile(bak) else ""
+                orig = find_backup(f.path)
         return orig, comp
 
     def show_selected(self):
@@ -347,11 +441,11 @@ class CompressPanel(QWidget):
             self.lbl.setText("Đang dừng… (chờ các file đang xử lý xong)")
 
     # ------------------------------------------------------------------ hành động
-    def analyze(self):
+    def analyze(self, rows=None):
         limit = self.sp.value()
         jobs = []
         for i, f in enumerate(self.files):
-            if f.error:
+            if f.error or (rows is not None and i not in rows):
                 continue
             if self._skipped(f):
                 self._set(i, 7, C.STATUS_TEXT[C.ST_SKIP_SIGNED], "#64748B")
@@ -364,7 +458,7 @@ class CompressPanel(QWidget):
         self.lbl.setText(f"Đang phân tích {fmt(len(jobs))} file…")
         self._start("measure", jobs)
 
-    def compress(self):
+    def compress(self, rows=None):
         limit = self.sp.value()
         overwrite = self.rb_over.isChecked()
         out = self.out_edit.text().strip()
@@ -380,13 +474,13 @@ class CompressPanel(QWidget):
         elif QMessageBox.question(
                 self, "Ghi đè file gốc",
                 "Các file sẽ được nén và GHI ĐÈ lên file gốc."
-                + ("\nBản gốc được sao lưu vào thư mục _backup_goc cạnh mỗi file." if self.ck_backup.isChecked()
+                + ("\nBản gốc được sao lưu vào Thùng rác của app (không để trong thư mục hồ sơ)." if self.ck_backup.isChecked()
                    else "\nKhông sao lưu – KHÔNG thể hoàn tác.") + "\n\nTiếp tục?") != QMessageBox.Yes:
             return
         self.release_cb()
         jobs = []
         for i, f in enumerate(self.files):
-            if f.error:
+            if f.error or (rows is not None and i not in rows):
                 continue
             dst = f.path if overwrite else os.path.join(out, f.rel)
             if self._skipped(f):
@@ -457,6 +551,7 @@ class CompressPanel(QWidget):
         self.worker.wait()
         self._enable_actions()
         self.busyChanged.emit(False)
+        self.apply_filter()
         if mode == "compress":
             s = self.stats
             saved = max(0, s["before"] - s["after"])

@@ -1,4 +1,6 @@
 import os
+import tempfile as _tf
+os.environ["APPDATA"] = _tf.mkdtemp()      # thùng rác / dữ liệu app của test không lẫn vào dữ liệu thật
 import shutil
 import sys
 import tempfile

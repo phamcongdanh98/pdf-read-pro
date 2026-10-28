@@ -6,7 +6,6 @@ from __future__ import annotations
 import io
 import os
 import re
-import shutil
 import tempfile
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional, Tuple
@@ -455,7 +454,7 @@ def default_output(src_path: str, suffix: str = "_DaTach") -> str:
 def save(result: SplitResult, src_path: str, out_path: str, pages: Optional[List[int]] = None,
          overwrite_source: bool = False) -> str:
     """Ghi file kết quả (qua file tạm rồi thay thế). Ghi đè file gốc chỉ khi overwrite_source=True,
-    và khi đó bản gốc được sao lưu vào _backup_goc."""
+    và khi đó bản gốc được sao lưu vào thư mục sao lưu của app."""
     same = os.path.normcase(os.path.abspath(out_path)) == os.path.normcase(os.path.abspath(src_path))
     if same and not overwrite_source:
         raise SplitError("Không được lưu đè lên file gốc (hãy chọn 'Lưu đè file gốc' nếu thật sự muốn).")
@@ -479,11 +478,8 @@ def save(result: SplitResult, src_path: str, out_path: str, pages: Optional[List
         with os.fdopen(fd, "wb") as fh:
             fh.write(buf.getvalue())
         if overwrite_source:
-            bdir = os.path.join(os.path.dirname(src_path), "_backup_goc")
-            os.makedirs(bdir, exist_ok=True)
-            bpath = os.path.join(bdir, os.path.basename(src_path))
-            if not os.path.exists(bpath):
-                shutil.copy2(src_path, bpath)
+            from . import trash
+            trash.make_backup(src_path, "Trước khi tách trang")
         os.replace(tmp, out_path)
     finally:
         if os.path.exists(tmp):

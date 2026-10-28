@@ -489,11 +489,8 @@ def compress_file(src: str, dst: str, limit_kb: int, backup: bool = False, threa
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
         if backup and os.path.abspath(src) == os.path.abspath(dst):
-            bdir = os.path.join(os.path.dirname(src), "_backup_goc")
-            os.makedirs(bdir, exist_ok=True)
-            bpath = os.path.join(bdir, os.path.basename(src))
-            if not os.path.exists(bpath):
-                shutil.copy2(src, bpath)
+            from . import trash
+            trash.make_backup(src, "Trước khi nén PDF")
         os.replace(tmp_path, dst)
         tmp_path = ""
         r.after, r.over_after, r.max_after_kb = len(data), still, mx / 1024

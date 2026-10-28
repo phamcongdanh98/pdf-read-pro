@@ -7,7 +7,7 @@ import threading
 import time
 from typing import Dict, List, Optional
 
-from PySide6.QtCore import QEvent, QSettings, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QTextCursor, QTextDocument
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFileDialog, QFrame, QGridLayout, QGroupBox,
                                QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
@@ -21,6 +21,7 @@ from .common import REVIEW_TEXT, ListDialog, fmt, fmt_size, open_path, reveal, s
 from .check_panel import CheckPanel
 from .compress_panel import CompressPanel
 from .guide import GUIDE_HTML
+from .filterbar import FILTER_ALL as VIEW_ALL, SORT_ORIG, FilterBar
 from .preview import PreviewPane, release_document
 from .rename_panel import RenamePanel
 from .report_panel import ReportPanel
@@ -32,6 +33,7 @@ from .sign_panel import SignPanel
 from .pipeline_panel import PipelinePanel
 from . import illustrations, styles
 from .persist import Persist
+from .tablekit import install_column_chooser
 from .styles import button
 from .widgets import ElidedLabel, StatCard
 
@@ -95,6 +97,19 @@ class _FitScroll(QScrollArea):
         return super().eventFilter(obj, e)
 
 
+SORT_KEY_ROLE = Qt.UserRole + 7
+
+
+class _SortItem(QTreeWidgetItem):
+    """Mục cây có khoá sắp xếp tuỳ chọn (cột 0 chứa tuple do apply_sort đặt) – không có khoá thì so theo chữ như thường."""
+
+    def __lt__(self, other):
+        a, b = self.data(0, SORT_KEY_ROLE), other.data(0, SORT_KEY_ROLE)
+        if a is not None and b is not None:
+            return a < b
+        return super().__lt__(other)
+
+
 def _scrollable(page: QWidget) -> QScrollArea:
     return _FitScroll(page)
 
@@ -109,7 +124,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{paths.APP_NAME} v{paths.APP_VERSION} – Đọc, kiểm tra và xử lý PDF")
         self.resize(1440, 900)
         self.setAcceptDrops(True)
-        self.settings = QSettings("PDFReadPro", "PDFReadPro")
+        self.settings = paths.make_settings()
         self.result: Optional[ScanResult] = None
         self.mode = FILTER_ALL
         self.scope: Optional[str] = None
@@ -120,6 +135,9 @@ class MainWindow(QMainWindow):
         activity.add_listener(self._on_activity)
         self._build_ui()
         self._init_persist()
+        from .trash_dialog import auto_purge
+        auto_purge()                       # (nếu bật) tự dọn mục thùng rác quá hạn
+        self._update_trash_btn()
         last = self.settings.value("last_folder", "")
         if last and os.path.isdir(last):
             self.path_edit.setText(last)
@@ -158,6 +176,12 @@ class MainWindow(QMainWindow):
         self.btn_theme.setCursor(Qt.PointingHandCursor)
         self.btn_theme.clicked.connect(self.toggle_theme)
         hl.addWidget(self.btn_theme, 0, Qt.AlignVCenter)
+        self.btn_font = QPushButton("Aa ▾")
+        self.btn_font.setObjectName("ThemeBtn")
+        self.btn_font.setCursor(Qt.PointingHandCursor)
+        self.btn_font.setToolTip("Cỡ chữ và độ đậm của chữ")
+        self.btn_font.clicked.connect(self._font_menu)
+        hl.addWidget(self.btn_font, 0, Qt.AlignVCenter)
         self.btn_reset = QPushButton("↺ Mặc định")
         self.btn_reset.setObjectName("ThemeBtn")
         self.btn_reset.setCursor(Qt.PointingHandCursor)
@@ -187,6 +211,9 @@ class MainWindow(QMainWindow):
         self.btn_scan = _btn("🔍 Quét / Làm mới", "success", self.start_scan, "Quét lại thư mục (F5)", "sm")
         self.btn_scan.setShortcut("F5")
         cl.addWidget(self.btn_scan)
+        self.btn_clear = _btn("🧹 Làm sạch", "warning", self.clear_all,
+                              "Xoá danh sách đã quét và xem trước (không xoá file nào trên đĩa)", "sm")
+        cl.addWidget(self.btn_clear)
         cl.addSpacing(10)
         self.chk_rec = QCheckBox("Quét thư mục con")
         self.chk_rec.setToolTip("Quét tất cả thư mục con bên trong")
@@ -211,7 +238,10 @@ class MainWindow(QMainWindow):
         for text, slot, tip in (
                 ("📋 Kiểm tra đủ 5 file", self.open_check5, "Mỗi thư mục có PDF phải có đủ file 01. – 05."),
                 ("🪪 Thư mục CCCD", self.open_cccd, "Thư mục tên đúng 12 chữ số; xoá vào Thùng rác"),
-                ("📦 Copy nhóm file", self.open_copy, "Copy file .signed / không .signed ra thư mục mới, giữ cây thư mục")):
+                ("📦 Copy nhóm file", self.open_copy, "Copy file .signed / không .signed ra thư mục mới, giữ cây thư mục"),
+                ("🗑 Thùng rác PDF-Read Pro", self.open_trash, "Trang đã xoá + bản gốc trước khi sửa: xem, khôi phục, xoá hẳn"),
+                ("📦 Dọn thư mục _backup_goc cũ", self.migrate_backups,
+                 "Chuyển các thư mục _backup_goc (bản cũ) trong thư mục đang mở vào nơi sao lưu của app – hồ sơ gọn lại")):
             act = m.addAction(text, slot)
             act.setToolTip(tip)
             act.setStatusTip(tip)
@@ -256,6 +286,11 @@ class MainWindow(QMainWindow):
         self.check.busyChanged.connect(lambda b: self._update_busy())
         self.check.changed.connect(self.rescan)
         self.check.helpRequested.connect(self.show_help)
+        self.check.refreshRequested.connect(self._file_edited)
+        self.compress.refreshRequested.connect(self._file_edited)
+        for pv in (self.preview, self.rename.preview, self.compress.preview):
+            pv.fileEdited.connect(self._file_edited)       # xoá trang từ khung xem trước → quét lại để số trang đúng
+        self.check.preview.fileEdited.connect(self._file_edited)
         self.report = ReportPanel(lambda: self.rules1361.rules)
         self.report.busy_check = self._busy_guard
         self.report.renamed.connect(self.rescan)
@@ -293,6 +328,11 @@ class MainWindow(QMainWindow):
         gl = QVBoxLayout(gw)
         gl.setContentsMargins(16, 10, 16, 10)
         gl.addWidget(guide)
+        from .trash_dialog import TrashPanel
+        self.trash = TrashPanel()
+        self.trash.changed.connect(self._file_edited)
+        self.trash.countChanged.connect(self._update_trash_btn)
+        self.tabs.addTab(_scrollable(self.trash), "🗑 Thùng rác")        # giữa Quy tắc và Hướng dẫn
         self.tabs.addTab(gw, "📖 Hướng dẫn")
         root.addWidget(self.tabs, 1)
         self.tabs.currentChanged.connect(self._flush_pending)
@@ -310,6 +350,9 @@ class MainWindow(QMainWindow):
         self.btn_stop = _btn("■ Dừng", "danger", self.stop_scan)
         self.btn_stop.hide()
         bar.addWidget(self.btn_stop)
+        self.btn_trash = _btn("🗑 Thùng rác", "flat", self.open_trash,
+                              "Trang đã xoá + bản gốc trước khi sửa / nén / cắt: xem lại, khôi phục, xoá hẳn", "sm")
+        bar.addWidget(self.btn_trash)
         self.btn_log = _btn("📜 Nhật ký", "flat", None, "Hiện / ẩn nhật ký thao tác", "sm")
         self.btn_log.setCheckable(True)
         bar.addWidget(self.btn_log)
@@ -329,10 +372,12 @@ class MainWindow(QMainWindow):
         """Mọi lựa chọn trong các tab được lưu lại và mở lại đúng như lần trước (ui/persist.py)."""
         p = Persist(self.settings)
         p.bind("main", self, ["chk_rec", "combo", "btn_log"])
-        p.bind("rename", self.rename, ["ck_suffix", "ck_only"])
+        p.bind("rename", self.rename, ["ck_suffix"])
         p.bind("split", self.split, ["cb_preset", "cb_mode", "sp_cut", "cb_order", "cb_arrange", "ck_first", "ck_last",
                                      "cb_flip", "cb_rot", "cb_size", "ck_blank", "ck_open"])
-        p.bind("check", self.check, ["ck_rot", "ck_sort", "ck_blank", "ck_signed", "rb_new", "rb_over", "ck_backup"])
+        p.bind("check", self.check, ["ck_rot", "ck_sort", "ck_blank", "ck_black", "sp_black", "c_blank", "c_black",
+                                    "c_orient", "c_num", "c_blur", "c_size", "c_dup", "cb_del", "ck_signed", "rb_new", "rb_over",
+                                    "ck_backup"])
         p.bind("compress", self.compress, ["sp", "ck_clean", "ck_signed", "rb_new", "rb_over", "ck_backup"])
         p.bind("report", self.report, ["ed_req", "cb_sign", "ck_adv"])
         p.bind("pipeline", self.pipeline, ["sp", "ck_clean", "cb_batch", "sp_batch"])
@@ -371,6 +416,10 @@ class MainWindow(QMainWindow):
             self._update_theme_btn()
             self.preview.refresh()
         self.settings.remove("theme")
+        if styles.font_settings() != (styles.DEFAULT_SCALE, styles.DEFAULT_BOLD):
+            self._apply_font(styles.DEFAULT_SCALE, styles.DEFAULT_BOLD)
+        self.settings.remove("font_scale")
+        self.settings.remove("font_bold")
         self._log_line("Cài đặt", "Đã khôi phục cài đặt gốc")
         self.status.setText("✔ Đã khôi phục cài đặt gốc.")
 
@@ -391,6 +440,43 @@ class MainWindow(QMainWindow):
             QApplication.restoreOverrideCursor()
         self.settings.setValue("theme", name)
         self._update_theme_btn()
+        self.preview.refresh()
+
+    def _font_menu(self):
+        """Menu «Aa»: cỡ chữ (Vừa / Lớn / Rất lớn / Cực lớn) + chữ đậm; áp dụng ngay và nhớ cho lần sau."""
+        from PySide6.QtGui import QActionGroup
+        from PySide6.QtWidgets import QApplication, QMenu
+        scale, bold = styles.font_settings()
+        m = QMenu(self)
+        grp = QActionGroup(m)
+        for label, sc in styles.FONT_SCALES:
+            a = m.addAction(f"{label}  ({round(sc * 100)}%)")
+            a.setCheckable(True)
+            a.setChecked(abs(sc - scale) < 0.01)
+            grp.addAction(a)
+            a.triggered.connect(lambda _=False, v=sc: self._apply_font(v, None))
+        m.addSeparator()
+        b = m.addAction("Chữ đậm")
+        b.setCheckable(True)
+        b.setChecked(bold)
+        b.triggered.connect(lambda on: self._apply_font(None, on))
+        m.exec(self.btn_font.mapToGlobal(self.btn_font.rect().bottomLeft()))
+        QApplication.processEvents()
+
+    def _apply_font(self, scale, bold):
+        from PySide6.QtWidgets import QApplication
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.setUpdatesEnabled(False)
+        try:
+            styles.set_font(QApplication.instance(), scale, bold)
+            from . import theme
+            theme.recolor_all(QApplication.instance())
+        finally:
+            self.setUpdatesEnabled(True)
+            QApplication.restoreOverrideCursor()
+        sc, bd = styles.font_settings()
+        self.settings.setValue("font_scale", sc)
+        self.settings.setValue("font_bold", bd)
         self.preview.refresh()
 
     def _update_theme_btn(self):
@@ -454,19 +540,20 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.scope_bar)
 
         r = QHBoxLayout()
-        self.search = QLineEdit()
-        self.search.setPlaceholderText("🔍 Tìm tên file / thư mục…")
-        self.search.setClearButtonEnabled(True)
-        self.search.setMinimumWidth(300)
-        self.search.textChanged.connect(self.apply_view)
-        r.addWidget(self.search)
+        self.fbar = FilterBar(
+            [("Tất cả", VIEW_ALL), ("⚠ Cần xem lại", "review"), ("❌ File lỗi / không đọc được", "error"),
+             ("✍ Có chữ ký số", "signed"), ("🔓 Chưa có chữ ký số", "nosig"), ("⛔ Chữ ký lỗi / file bị sửa", "badsig")],
+            [("Thứ tự gốc", SORT_ORIG, False), ("Tên A → Z", "name", False), ("Số trang nhiều → ít", "pages", True),
+             ("Dung lượng lớn → nhỏ", "size", True), ("Vấn đề lên trước", "problem", False)])
+        self.fbar.changed.connect(self._view_changed)
+        self.search = self.fbar.search
+        r.addWidget(self.fbar, 1)
         r.addWidget(_btn("⊞ Mở hết", "light", lambda: self.tree.expandAll(), size="sm"))
         r.addWidget(_btn("⊟ Thu gọn", "light", lambda: self.tree.collapseAll(), size="sm"))
-        r.addStretch(1)
+        lay.addLayout(r)
         hint = QLabel("Bấm thư mục để thống kê riêng · bấm file để xem trước · bấm đôi để mở · chuột phải để thêm lựa chọn")
         hint.setObjectName("Hint")
-        r.addWidget(hint)
-        lay.addLayout(r)
+        lay.addWidget(hint)
 
         self.tree = QTreeWidget()
         self.tree.setColumnCount(5)
@@ -478,6 +565,8 @@ class MainWindow(QMainWindow):
         self.tree.customContextMenuRequested.connect(self.tree_menu)
         self.tree.itemSelectionChanged.connect(self.selection_changed)
         self.tree.itemDoubleClicked.connect(self.tree_double)
+        install_column_chooser(self.tree, "overview", (0,))
+        self.fbar.attach_columns(self.tree, "overview", (0,))
         self.tree.header().setStretchLastSection(True)
         for i, wd in enumerate((320, 85, 95, 145, 300)):
             self.tree.setColumnWidth(i, wd)
@@ -582,7 +671,9 @@ class MainWindow(QMainWindow):
         """Tab Hướng dẫn / Bộ quy tắc không dùng thư mục nguồn → ẩn thanh thư mục cho thoáng."""
         w = self.tabs.currentWidget()
         inner = w.widget() if isinstance(w, QScrollArea) else w
-        self.cfg.setVisible(inner not in (self.rules_wrap, self.guide.parentWidget()))
+        self.cfg.setVisible(inner not in (self.rules_wrap, self.guide.parentWidget(), self.trash))
+        if inner is self.trash:
+            self.trash.reload()
 
     def clear_all(self):
         if self.busy:
@@ -625,6 +716,31 @@ class MainWindow(QMainWindow):
         self.thread.progress.connect(self.on_progress)
         self.thread.finished_scan.connect(self.on_scan_done)
         self.thread.start()
+
+    def _file_edited(self, path: str):
+        """File vừa bị sửa tại chỗ (xoá trang / cắt viền / hoàn tác / khôi phục): đọc lại riêng file đó và cập nhật dòng ở mọi tab –
+        KHÔNG quét lại cả thư mục (giữ nguyên dòng đang chọn và khung xem trước)."""
+        self._update_trash_btn()
+        f = next((x for x in (self.result.files if self.result else [])
+                  if os.path.normcase(x.path) == os.path.normcase(path)), None)
+        if f is None:
+            self.rescan()
+            return
+        f.error, f.pages, f.sig_status, f.sig_count = "", None, "none", 0
+        scanner.analyze_file(f)
+        try:
+            st_ = os.stat(path)
+            f.size, f.mtime = st_.st_size, st_.st_mtime
+        except OSError:
+            pass
+        it = next((i for i, ff in self.file_items if ff is f), None)
+        if it is not None:
+            self._fill_file_item(it, f)
+        self.compress.refresh_file(f)
+        self.check.sync_file(path)                       # tab Kiểm tra trang: bỏ kết quả cũ nếu số trang không còn khớp
+        self._update_cards()
+        self.status.setText(f"✔ Đã cập nhật {f.name}: {fmt(f.pages or 0)} trang · {fmt_size(f.size)} "
+                            "(trang xoá / bản gốc nằm trong 🗑 Thùng rác).")
 
     def rescan(self):
         if self.result:
@@ -693,6 +809,20 @@ class MainWindow(QMainWindow):
             fn()
 
     # ================================================================= cây thư mục
+    def _fill_file_item(self, it, f: FileInfo):
+        label, color = sig_label(f)
+        it.setText(1, "—" if f.pages is None else fmt(f.pages))
+        it.setText(2, fmt_size(f.size))
+        it.setText(3, label)
+        it.setForeground(3, QColor(color))
+        it.setText(4, who_when(f))
+        it.setToolTip(4, who_when(f))
+        for c in (1, 2):
+            it.setTextAlignment(c, Qt.AlignRight | Qt.AlignVCenter)
+        if f.error:
+            it.setForeground(0, QColor("#DC2626"))
+            it.setToolTip(0, f"{f.path}\n{f.error}")
+
     def build_tree(self):
         self.tree.setUpdatesEnabled(False)
         self.tree.clear()
@@ -702,7 +832,7 @@ class MainWindow(QMainWindow):
             if not d:
                 continue
             parent = self.dir_items.get(os.path.dirname(d), self.tree.invisibleRootItem())
-            it = QTreeWidgetItem(parent, ["📁 " + os.path.basename(d)])
+            it = _SortItem(parent, ["📁 " + os.path.basename(d)])
             it.setData(0, ROLE, ("dir", d))
             f = it.font(0)
             f.setBold(True)
@@ -711,42 +841,72 @@ class MainWindow(QMainWindow):
             self.dir_items[d] = it
         for f in res.files:
             parent = self.dir_items.get(f.dir_rel, self.tree.invisibleRootItem())
-            it = QTreeWidgetItem(parent, ["📄 " + f.name])
+            it = _SortItem(parent, ["📄 " + f.name])
             it.setData(0, ROLE, ("file", f))
             it.setToolTip(0, f.path)
             self.file_items.append((it, f))
-            label, color = sig_label(f)
-            it.setText(1, "—" if f.pages is None else fmt(f.pages))
-            it.setText(2, fmt_size(f.size))
-            it.setText(3, label)
-            it.setForeground(3, QColor(color))
-            it.setText(4, who_when(f))
-            it.setToolTip(4, who_when(f))
-            for c in (1, 2):
-                it.setTextAlignment(c, Qt.AlignRight | Qt.AlignVCenter)
-            if f.error:
-                it.setForeground(0, QColor("#DC2626"))
-                it.setToolTip(0, f"{f.path}\n{f.error}")
+            self._fill_file_item(it, f)
         for k, it in self.dir_items.items():
             if not os.path.dirname(k):
                 it.setExpanded(True)
         self.tree.setUpdatesEnabled(True)
+        if self.fbar.sort_key != SORT_ORIG:
+            self.apply_sort()
+
+    @staticmethod
+    def _file_tags(f: FileInfo) -> set:
+        tags = set()
+        if f.error:
+            tags.add("error")
+        elif f.has_real_sig:
+            tags.add("signed")
+        else:
+            tags.add("nosig")
+        if f.sig_status in ("modified", "broken"):
+            tags.add("badsig")
+        if f.needs_review:
+            tags.add("review")
+        return tags
+
+    def apply_sort(self):
+        """Sắp xếp cây theo ô «Sắp xếp»: thư mục luôn đứng trước file, file sắp theo khoá chọn."""
+        if not self.result:
+            return
+        sk = self.fbar.sort_key
+        self.tree.setUpdatesEnabled(False)
+        for i, (d, it) in enumerate(self.dir_items.items()):
+            it.setData(0, SORT_KEY_ROLE, (0, os.path.basename(d).lower() if sk == "name" else "", i))
+        for i, (it, f) in enumerate(self.file_items):
+            primary = {"name": f.name.lower(), "pages": -(f.pages or 0), "size": -f.size,
+                       "problem": 0 if f.needs_review else 1}.get(sk, 0)
+            it.setData(0, SORT_KEY_ROLE, (1, primary, i))
+        self.tree.sortItems(0, Qt.AscendingOrder)
+        self.tree.setUpdatesEnabled(True)
+
+    def _view_changed(self, *_):
+        self.apply_sort()
+        self.apply_view()
 
     def apply_view(self, *_):
         if not self.result:
             return
         q = self.search.text().strip().lower()
+        vf = self.fbar.filter_key
         self.tree.setUpdatesEnabled(False)
         visible_dirs = set()
+        shown = 0
         for it, f in self.file_items:
-            show = match_filter(f, self.mode) and (not q or q in f.name.lower() or q in f.dir_rel.lower())
+            show = (match_filter(f, self.mode) and (vf == VIEW_ALL or vf in self._file_tags(f))
+                    and (not q or q in f.name.lower() or q in f.dir_rel.lower()))
+            shown += show
             it.setHidden(not show)
             if show:
                 d = f.dir_rel
                 while d:
                     visible_dirs.add(d)
                     d = os.path.dirname(d)
-        narrow = bool(q) or self.mode != FILTER_ALL
+        narrow = bool(q) or self.mode != FILTER_ALL or vf != VIEW_ALL
+        self.fbar.set_counts(shown, len(self.file_items))
         totals = st.folder_totals(self.result, self.mode)
         for d, it in self.dir_items.items():
             it.setHidden(narrow and d not in visible_dirs)
@@ -803,6 +963,11 @@ class MainWindow(QMainWindow):
             m.addAction("✂ Tách trang file này", lambda: (self.split.load_file(val.path),
                                                          self._show_tab(self.split)))
             m.addAction("📋 Sao chép đường dẫn", lambda: QGuiApplication.clipboard().setText(val.path))
+            m.addSeparator()
+            m.addAction("🔄 Cập nhật file này (đọc lại số trang, chữ ký)", lambda: self._file_edited(val.path))
+            m.addAction("🔍 Kiểm tra trang riêng file này", lambda: (self._show_tab(self.check), self.check.run_for_path(val.path)))
+            m.addAction("📊 Phân tích dung lượng riêng file này",
+                        lambda: (self._show_tab(self.compress), self.compress.run_for_path(val.path)))
         else:
             full = os.path.join(self.result.root, val)
             m.addAction("📊 Thống kê riêng thư mục này", lambda: self._set_scope(val))
@@ -945,6 +1110,42 @@ class MainWindow(QMainWindow):
         if self._require_data():
             from .tools_dialogs import CopyGroupDialog
             CopyGroupDialog(self, self.result, self.mode).exec()
+
+    def migrate_backups(self):
+        """Chuyển mọi thư mục `_backup_goc` cũ nằm trong thư mục hồ sơ vào nơi sao lưu của app (đăng ký vào Thùng rác)."""
+        from ..core import trash
+        root = self.result.root if self.result else self.path_edit.text().strip().strip('"')
+        if not root or not os.path.isdir(root):
+            self.warn("Hãy chọn thư mục hồ sơ trước.")
+            return
+        found = [os.path.join(dp, fn) for dp, dns, fns in os.walk(root) if os.path.basename(dp) == trash.LEGACY_DIR for fn in fns]
+        if not found:
+            QMessageBox.information(self, "Dọn _backup_goc", "Không có thư mục _backup_goc cũ nào trong thư mục này – đã gọn rồi.")
+            return
+        if QMessageBox.question(self, "Dọn _backup_goc",
+                                f"Có {len(found)} file sao lưu cũ trong các thư mục _backup_goc.\n\nChuyển hết vào nơi sao lưu của app "
+                                f"({trash.backup_root()}) và đăng ký vào Thùng rác (vẫn khôi phục được)?\n"
+                                "Thư mục _backup_goc trống sẽ bị xoá.", QMessageBox.Yes | QMessageBox.No,
+                                QMessageBox.Yes) != QMessageBox.Yes:
+            return
+        moved, skipped, errors = trash.migrate_legacy(root)
+        self._update_trash_btn()
+        text = f"Đã chuyển {moved} file" + (f"; bỏ qua {skipped} (đã có bản sao lưu trong app)" if skipped else "") + "."
+        if errors:
+            text += "\n\nLỗi:\n" + "\n".join(errors[:6])
+        QMessageBox.information(self, "Dọn _backup_goc", text)
+        self.rescan()
+
+    def open_trash(self):
+        self._show_tab(self.trash)
+
+    def _update_trash_btn(self):
+        from ..core import trash
+        try:
+            n = len(trash.list_entries())
+        except Exception:
+            n = 0
+        self.btn_trash.setText(f"🗑 Thùng rác ({n})" if n else "🗑 Thùng rác")
 
     def show_log(self):
         rows = []

@@ -8,16 +8,18 @@ from typing import Callable, List, Optional
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QGroupBox, QHBoxLayout,
-                               QHeaderView, QLabel, QLineEdit, QMessageBox, QSplitter, QTableWidget, QTableWidgetItem,
+                               QHeaderView, QLabel, QMessageBox, QSplitter, QTableWidget, QTableWidgetItem,
                                QVBoxLayout, QWidget)
 
 from ..core import activity, renamer as R
 from ..core.models import FileInfo
 from .common import ListDialog, fmt
+from .filterbar import FILTER_ALL, SORT_ORIG, FilterBar
 from .preview import PreviewPane, make_collapsible
 from .rules1361_panel import Rules1361Panel
 from .rules_panel import RulesPanel
 from .styles import button
+from .tablekit import install_column_chooser, install_row_menu
 
 MODE_1361 = "1361"
 MODE_CUSTOM = "custom"
@@ -83,19 +85,20 @@ class RenamePanel(QWidget):
         self.lbl_rule = QLabel("")
         self.lbl_rule.setWordWrap(True)
         r.addWidget(self.lbl_rule, 1)
-        self.search = QLineEdit()
-        self.search.setPlaceholderText("🔍 Lọc theo tên file…")
-        self.search.setClearButtonEnabled(True)
-        self.search.setFixedWidth(260)
-        self.search.textChanged.connect(self.fill_table)
-        r.addWidget(self.search)
-        self.ck_only = QCheckBox("Chỉ hiện file sẽ đổi")
-        self.ck_only.toggled.connect(self.fill_table)
-        r.addWidget(self.ck_only)
         self.lbl_scope = QLabel("")
         self.lbl_scope.setObjectName("Hint")
         r.addWidget(self.lbl_scope)
         root.addLayout(r)
+        self.fbar = FilterBar(
+            [("Tất cả", FILTER_ALL), ("🚀 Sẽ đổi tên", "ready"), ("✔ Không đổi (đã đúng tên)", "same"),
+             ("❓ Chưa có quy tắc / mã số", "norule"), ("⚠ Lỗi / trùng tên", "bad"), ("❌ File lỗi", "error"),
+             ("⚠ Có vấn đề (mọi loại)", "problem")],
+            [("Thứ tự gốc", SORT_ORIG, False), ("Tên file A → Z", "name", False), ("Thư mục A → Z", "dir", False),
+             ("Tên mới A → Z", "new", False), ("Mã số tăng dần", "code", False), ("Vấn đề lên trước", "problem", False)],
+            "🔍 Tìm theo tên file / tên mới / thư mục…")
+        self.fbar.changed.connect(self.fill_table)
+        self.search = self.fbar.search
+        root.addWidget(self.fbar)
 
         left = QGroupBox("Xem trước kết quả đổi tên")
         ll = QVBoxLayout(left)
@@ -116,6 +119,9 @@ class RenamePanel(QWidget):
         self.table.itemChanged.connect(self._item_changed)
         self.table.currentCellChanged.connect(lambda row, *_: self._show_row(row))
         ll.addWidget(self.table)
+        install_column_chooser(self.table, "rename", (1, 3))
+        self.fbar.attach_columns(self.table, "rename", (1, 3))
+        install_row_menu(self.table, self._paths_of_rows, self._row_extras)
         root.addWidget(left, 1)
         split.addWidget(leftw)
         rightg = QGroupBox("Xem trước file PDF")
@@ -244,11 +250,8 @@ class RenamePanel(QWidget):
         self.fill_table()
 
     def fill_table(self, *_):
-        q = self.search.text().strip().lower()
-        only = self.ck_only.isChecked()
-        rows = [it for it in self.items
-                if (not only or it.status in CAN_RENAME)
-                and (not q or q in it.fi.name.lower() or q in it.new_name.lower() or q in it.fi.dir_rel.lower())]
+        rows = self.fbar.arrange(self.items, self._info)
+        self.fbar.set_counts(len(rows), len(self.items))
         self._rows = rows
         self.table.blockSignals(True)
         self.table.setUpdatesEnabled(False)
@@ -291,6 +294,49 @@ class RenamePanel(QWidget):
         self.table.setUpdatesEnabled(True)
         self.table.blockSignals(False)
         self.update_summary()
+
+    @staticmethod
+    def _info(it):
+        """(nhãn lọc, văn bản tìm, khoá sắp xếp) của 1 dòng xem trước."""
+        tags = set()
+        if it.fi.error:
+            tags.add("error")
+        if it.status in CAN_RENAME:
+            tags.add("ready")
+        elif it.status == R.ST_SAME:
+            tags.add("same")
+        elif it.status in (R.ST_NO_RULE, R.ST_NO_CODE):
+            tags.add("norule")
+        elif it.status in (R.ST_INVALID, R.ST_CONFLICT):
+            tags.add("bad")
+        if tags & {"error", "norule", "bad"}:
+            tags.add("problem")
+        text = f"{it.fi.name} {it.new_name} {it.fi.dir_rel}".lower()
+        rank = 0 if "error" in tags else 1 if "bad" in tags else 2 if "norule" in tags else 3 if "ready" in tags else 4
+        return tags, text, {"name": it.fi.name.lower(), "dir": it.fi.dir_rel.lower(), "new": (it.new_name or "").lower(),
+                            "code": it.code or "", "problem": rank}
+
+    def _paths_of_rows(self, rows):
+        return [self._rows[r].fi.path for r in rows if 0 <= r < len(self._rows)]
+
+    def _row_extras(self, rows):
+        if not rows or not 0 <= rows[0] < len(self._rows):
+            return []
+        it = self._rows[rows[0]]
+        can = it.status in CAN_RENAME
+        return [
+            (("☐ Bỏ tích dòng này" if it.checked else "☑ Tích dòng này") + (" (không đổi tên được)" if not can else ""),
+             lambda: self._toggle_rows(rows), can),
+            ("🔄 Tính lại xem trước (làm mới)", self.refresh),
+        ]
+
+    def _toggle_rows(self, rows):
+        for r in rows:
+            if 0 <= r < len(self._rows) and self._rows[r].status in CAN_RENAME:
+                it = self._rows[r]
+                it.checked = not it.checked
+                (self.unchecked.discard if it.checked else self.unchecked.add)(it.fi.path)
+        self.fill_table()
 
     def _show_row(self, row: int):
         if 0 <= row < len(self._rows):

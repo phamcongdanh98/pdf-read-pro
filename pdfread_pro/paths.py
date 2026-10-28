@@ -5,7 +5,7 @@ import os
 import sys
 
 APP_NAME = "PDF-Read Pro"
-APP_VERSION = "1.9.0"
+APP_VERSION = "1.9.1"
 
 
 def data_dir() -> str:
@@ -23,3 +23,11 @@ def icon_path() -> str:
     """assets/app.ico – cạnh mã nguồn khi chạy py, trong thư mục giải nén khi chạy exe (PyInstaller)."""
     base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     return os.path.join(base, "assets", "app.ico")
+
+
+def make_settings():
+    """QSettings của app (Registry). Biến môi trường PDFREADPRO_SETTINGS_INI trỏ tới 1 file .ini → dùng file đó
+    (các bài test dùng để KHÔNG đụng vào cài đặt thật của người dùng)."""
+    from PySide6.QtCore import QSettings
+    ini = os.environ.get("PDFREADPRO_SETTINGS_INI")
+    return QSettings(ini, QSettings.IniFormat) if ini else QSettings("PDFReadPro", "PDFReadPro")

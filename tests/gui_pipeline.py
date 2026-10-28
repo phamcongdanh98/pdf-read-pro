@@ -5,8 +5,13 @@ import sys
 import tempfile
 import time
 
-os.environ["APPDATA"] = tempfile.mkdtemp()
+# tiến trình con (spawn) chạy lại đầu file này → dùng chung 1 thư mục dữ liệu tạm qua biến môi trường
+os.environ.setdefault("PDFREAD_TEST_APPDATA", tempfile.mkdtemp())
+os.environ["APPDATA"] = os.environ["PDFREAD_TEST_APPDATA"]
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+# cài đặt của test nằm trong file .ini tạm – KHÔNG ghi / xoá cài đặt thật của người dùng trong Registry
+os.environ.setdefault("PDFREADPRO_SETTINGS_INI", os.path.join(tempfile.mkdtemp(), "test_settings.ini"))
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
@@ -24,7 +29,7 @@ def pump(app, cond, timeout=120):
 
 
 def main():
-    from PySide6.QtCore import Qt, QElapsedTimer, QSettings, QTimer
+    from PySide6.QtCore import Qt, QElapsedTimer, QTimer
     from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
     from pdfread_pro.ui import theme as TH, styles as ST
     TH.install()
@@ -34,7 +39,7 @@ def main():
     from make_signed_sample import sign_pdf
 
     G.BUSY_SECONDS = 0
-    QSettings("PDFReadPro", "PDFReadPro").clear()
+    __import__('pdfread_pro.paths', fromlist=['x']).make_settings().clear()
     work = tempfile.mkdtemp()
     src = os.path.join(work, "Ho so")
     a, b = os.path.join(src, "Chi bo 1", A), os.path.join(src, "Chi bo 1", B)

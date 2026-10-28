@@ -5,7 +5,7 @@ Chạy ngay: `dist\PDFReadPro.exe` (1 file, không cần cài, không cần quy�
 
 ## Bố cục (v1.8 – phong cách Hồ sơ 1361, gọn hơn)
 ```
-PDF-READ PRO  (banner 1 dòng)                                            [🌙 Tối]  v1.9.0
+PDF-READ PRO  (banner 1 dòng)                                            [🌙 Tối]  v1.9.1
 ┌ Cấu hình & Thư mục nguồn ──────────────────────────────────────────────────────────────┐
 │ Thư mục: [...............................................] [Chọn thư mục] [Quét] [Clear]│
 │ ☑ Quét thư mục con  Tính số trang: [Tất cả ▾]   Công cụ: [Đủ 5 file][CCCD][Copy][☰ Thêm]│
@@ -152,10 +152,23 @@ Màu chữ / nền viết trong từng tab được đổi tự động (`ui/the
 nhiều file):
 - phát hiện trang **ngược 180°** / **nằm ngang 90°**, **sai thứ tự**, **thiếu số**, **trùng số**, số lạ (đọc nhầm), **trang trắng**;
 - **🛠 Sửa tự động**: xoay đúng chiều, sắp lại theo số trang, (tuỳ chọn) bỏ trang trắng. Chỉ đổi /Rotate và thứ tự trang –
-  **không nén lại ảnh**. Lưu sang thư mục mới (file không cần sửa chép nguyên cho đủ bộ) hoặc ghi đè có `_backup_goc`;
+  **không nén lại ảnh**. Lưu sang thư mục mới (file không cần sửa chép nguyên cho đủ bộ) hoặc ghi đè có sao lưu (Thùng rác của app);
 - an toàn: chỉ tự sắp xếp khi đọc được số ở ≥ 1/2 số trang **và** không có số trùng (file ghép nhiều văn bản đánh số lại
   từ 1 → chỉ báo "cần xem lại"); trang không có số (bìa, phụ lục) đi liền sau trang đứng trước nó; bỏ qua file đã ký số;
-- bảng **Chi tiết từng trang**: bấm trang để xem ở khung xem trước; bấm đôi ô *Số in* để sửa tay, chuột phải để đổi hướng.
+- bảng **Chi tiết từng trang**: bấm trang để xem ở khung xem trước; bấm đôi ô *Số in* để sửa tay, chuột phải để đổi hướng;
+- **v1.9.1 – nhận dạng nội dung trang**: ⬜ **trắng** (hẳn / gần trắng: chỉ nhiễu, vết bẩn, lề đen scan – đo theo màu nền nên scan ám xám vẫn nhận), ⬛ **đen** (≥ ngưỡng chỉnh được, mặc định 90%; hiện cột % đen), ◧ đen một phần, ◼ ảnh tối **có chi tiết** (không bị coi là đen), ▫ rất ít nội dung (dấu / chữ ký – chỉ cảnh báo), 🌫 có thể mờ, 📐 khổ giấy lệch, ⧉ trùng nội dung (cùng chữ + cùng ảnh). Trang trắng / đen không đưa vào OCR (nhanh hơn, không báo "số lạ"). Tuỳ chọn **Bỏ trang trắng / Bỏ trang đen** khi sửa; đổi ngưỡng đen áp dụng ngay;
+- **Chọn kiểm tra gì** (tích từng mục: ⬜ trắng · ⬛ đen · 🔄 ngược / ngang · 🔢 số trang · 🌫 mờ · 📐 khổ lệch · ⧉ trùng; menu **☑ Chọn nhanh**): chỉ tích trắng / đen / mờ / khổ / trùng thì **không chạy OCR** (~3 ms/trang); bật thêm hướng / số trang sau đó thì file báo "cần kiểm tra lại";
+- **Nhanh hơn ~2×, kết quả y hệt** (v1.9.1): OCR đọc song song nhiều trang trong mỗi tiến trình (mỗi trang 1 engine, vẽ trang kế trong lúc OCR) + dùng nhiều tiến trình hơn (theo số nhân CPU); đo trên 120 file / 613 trang thật: 76 → 37 ms/trang, kết quả từng trang trùng khớp 100% với đọc tuần tự. File **không đổi** (cùng kích thước + ngày sửa) được lưu kết quả vào `%APPDATA%\PDFReadPro\check_cache.pkl` → kiểm tra lại gần như tức thì (giữ Ctrl khi bấm Kiểm tra để làm lại từ đầu file đang chọn). Quét thư mục: ~0,25 ms/file CPU (27.612 file: 7 giây khi đã có trong bộ nhớ đệm hệ điều hành; lần đầu phụ thuộc tốc độ đọc đĩa);
+- **Bản sao lưu KHÔNG còn nằm trong thư mục hồ sơ** (v1.9.1): bản gốc trước khi sửa / nén / tách / cắt / xoá trang được cất ở `%APPDATA%\PDFReadPro\backup\<mã>\<tên file>` (đổi được ở tab 🗑 Thùng rác → «Nơi lưu bản sao lưu…»), chỉ giữ bản sớm nhất của mỗi file. Thư mục `_backup_goc` kiểu cũ vẫn đọc được; menu 🧰 Công cụ → **📦 Dọn thư mục _backup_goc cũ** chuyển hết vào nơi mới (đăng ký vào Thùng rác, xoá thư mục trống);
+- **▦ Chọn cột hiển thị** (nút «▦ Cột ▾» cạnh thanh Hiển thị hoặc chuột phải vào tiêu đề cột) ở các tab Tổng quan, Đổi tên, Nén PDF, Kiểm tra trang (cả bảng chi tiết trang) và Thùng rác – nhớ lựa chọn, cột tên file được bảo vệ; **chuột phải vào dòng** (`ui/tablekit.py`): việc riêng của dòng (Kiểm tra trang: 🔄 Cập nhật dòng này · 🔍 Kiểm tra lại · 🛠 Sửa riêng file này · 🗑 Xoá ngay trang trắng + đen · ↩ Khôi phục bản gốc · ✔ Đánh dấu đã xử lý bằng tay; Nén PDF: 🔄 Cập nhật · 📊 Phân tích riêng · ⚡ Nén riêng; Đổi tên: ☑ tích / bỏ tích · 🔄 tính lại; Tổng quan: 🔄 Cập nhật · 🔍 Kiểm tra trang · 📊 Phân tích) và việc chung (mở file, mở thư mục, sao chép đường dẫn / tên / nội dung dòng);
+- Tô màu trạng thái nay **tô CẢ HÀNG** cùng một màu; ✂ Cắt viền chỉ cắt **trang đang xem** (đã bỏ «Cắt mọi trang») và có ↩ Hoàn tác nhiều bước (không tự ẩn);
+- **Kiểm tra trang – xoá ngay / màu trạng thái** (v1.9.1): nút **🗑 Xoá trang này** (khung xem trước) và phím Delete có 2 chế độ chọn ở ô **«Nút 🗑 / Delete»**: *Xoá ngay* (mặc định – xoá thật khỏi file, cất Thùng rác, kết quả kiểm tra bỏ đúng trang đó, không cần kiểm tra lại) hoặc *Chỉ đánh dấu xoá* (xoá khi bấm SỬA TỰ ĐỘNG). Bảng chi tiết trang có thêm **🗑 Xoá ngay** cho nhiều trang chọn cùng lúc. Cột Trạng thái mỗi tình trạng một màu: ✔ Đạt (chữ xanh) · ⚠ Cần xem lại (vàng) · 🛠 Cần sửa (cam) · lỗi (đỏ) · ⏳ cần kiểm tra lại (tím) · **✔ Đã xử lý / Đã sửa: cả dòng tô nền xanh lá**; sau khi xử lý, «Bản gốc» (bản sao lưu) ↔ «Bản đã sửa» (file hiện tại) dùng được. Xoá / cắt tại chỗ chỉ cập nhật đúng dòng của file đó, không quét lại cả thư mục;
+- **🗑 Thùng rác PDF-Read Pro** (v1.9.1, `core/trash.py` + `ui/trash_dialog.py`; **tab riêng giữa Quy tắc và Hướng dẫn**, nút ở thanh dưới + menu 🧰 Công cụ cũng mở tab này): cất *trang đã xoá* (khôi phục = chèn lại ĐÚNG vị trí cũ) và *bản gốc trước khi sửa / nén / tách / cắt* (mục trỏ tới `_backup_goc`, không chép lại; khôi phục = trả file về như trước, bản hiện tại được cất lại). Xem trước, khôi phục nhiều mục, xoá vĩnh viễn, dọn sạch, lọc / sắp xếp, tuỳ chọn **tự dọn mục cũ hơn N ngày** (mặc định tắt). Khác Thùng rác của Windows (dùng khi xoá thư mục CCCD / kết quả quy trình);
+- **Nút 🗑 Xoá trang này** ở khung xem trước (mọi tab): ô **«Hỏi xác nhận trước khi xoá / cắt»** – tắt thì xoá ngay, **vẫn hoàn tác được** (thanh ↩ Hoàn tác 20 giây + Thùng rác); file đã ký số luôn được hỏi;
+- **✂ Cắt viền** ở khung xem trước: kéo khung (4 góc / 4 cạnh, kéo trong để dời), *Cắt trang này* hoặc *Cắt mọi trang* (cùng tỉ lệ). Đặt khung hiển thị CropBox – không nén lại ảnh, phần ngoài khung bị ẩn với mọi trình đọc; sao lưu vào Thùng rác của app + Thùng rác, ↩ Hoàn tác trả lại khung cũ;
+- **Cỡ chữ / độ đậm**: nút **Aa** trên banner (Vừa / Lớn / Rất lớn / Cực lớn + Chữ đậm; mặc định Lớn 112% + đậm), nhớ cho lần sau; nút **🧹 Làm sạch** (xoá danh sách đã quét) nằm lại cạnh nút Quét; bảng chi tiết trang vẫn cuộn chuột được khi đang kiểm tra;
+- **Thanh «Hiển thị · Sắp xếp · Tìm»** (v1.9.1) ở các tab Tổng quan, Đổi tên, Nén PDF, Kiểm tra trang: lọc file lỗi / có vấn đề / cần sửa / đạt / chưa xử lý (và ở Kiểm tra trang: có trang trắng, đen, sai hướng, mờ, khổ lệch, trùng, đánh dấu xoá), sắp theo tên, thư mục, số trang, dung lượng, "vấn đề lên trước"; chỉ đổi cách hiển thị, không đổi file (`ui/filterbar.py`);
+- **🗑 Xoá trang**: đánh dấu trang cần xoá (nút, chuột phải, phím Delete, hoặc nút 🗑 ở khung xem trước; **☑ Chọn nhanh** mọi trang trắng / đen / trùng / mờ), xoá thật khi bấm *Sửa tự động*; có bộ lọc trang. Nút **🗑 Xoá trang này** cũng có ở khung xem trước của tab Tổng quan, Đổi tên, Nén PDF: hỏi xác nhận, sao lưu vào `_backup_goc`, cảnh báo nếu file đã ký số, không cho xoá hết trang.
 
 Tab Giảm dung lượng và Kiểm tra trang có **khung xem trước cao hết tab** (như Tổng quan), so *Bản gốc ↔ Bản đã nén / đã sửa*.
 
@@ -180,7 +193,7 @@ khác **bản zip portable hoặc bộ cài** thay vì exe 1 file. Còn báo nh�
 từng hãng – Microsoft: https://www.microsoft.com/wdsi/filesubmission. Triệt để nhất là ký số exe (chứng thư
 code signing, có phí).
 
-Bộ cài (cần Inno Setup 6): `py build.py --dir` rồi `ISCC.exe installer.iss` → `dist\Setup_PDFReadPro_1.9.0.exe`.
+Bộ cài (cần Inno Setup 6): `py build.py --dir` rồi `ISCC.exe installer.iss` → `dist\Setup_PDFReadPro_1.9.1.exe`.
 Bản build lọc bỏ thư viện / plugin Qt app không dùng (xem `build.py`): exe 1 file ~59 MB, mở ~1,8 giây;
 bản thư mục mở ~0,9 giây.
 

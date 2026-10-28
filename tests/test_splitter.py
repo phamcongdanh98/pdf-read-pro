@@ -1,4 +1,6 @@
 import os
+import tempfile as _tf
+os.environ["APPDATA"] = _tf.mkdtemp()      # thùng rác / dữ liệu app của test không lẫn vào dữ liệu thật
 import sys
 import tempfile
 import unittest
@@ -138,7 +140,7 @@ class SplitterTests(unittest.TestCase):
         # lưu đè có chủ đích → có sao lưu bản gốc
         S.save(res, srcp, srcp, overwrite_source=True)
         self.assertEqual(fitz.open(srcp).page_count, 2)
-        self.assertEqual(fitz.open(os.path.join(d, "_backup_goc", "so.pdf")).page_count, 1)
+        self.assertEqual(fitz.open(__import__("pdfread_pro.core.trash", fromlist=["x"]).backup_path_for(os.path.join(d, "so.pdf"))).page_count, 1)
 
 
 def numbered_booklet(true_opts, n_pages, face_size, number_style="- {} -"):

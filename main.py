@@ -8,7 +8,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def selftest(out_path: str) -> int:
     """Tự kiểm tra các thành phần lõi (chạy được cả trong exe đóng gói)."""
-    import io
     import shutil
     import tempfile
     import traceback
@@ -17,7 +16,7 @@ def selftest(out_path: str) -> int:
     lines, ok = [], True
     try:
         from PIL import Image
-        from pdfread_pro.core import compressor as C, scanner, stats, renamer as R
+        from pdfread_pro.core import compressor as C, scanner, renamer as R
         import pymupdf
         work = tempfile.mkdtemp()
         sub = os.path.join(work, "A")
@@ -75,12 +74,40 @@ def selftest(out_path: str) -> int:
             with ProcessPoolExecutor(max_workers=1) as ex:
                 cr = ex.submit(pagecheck.job_check, (ck,)).result()
             plan = pagecheck.make_plan(cr.pages)
+            with ProcessPoolExecutor(max_workers=1) as ex:        # đọc song song nhiều trang phải cho kết quả y hệt
+                cp = ex.submit(pagecheck.job_check, (ck, 0.9, True, True, 3)).result()
+            same = [(p.angle, p.number) for p in cp.pages] == [(p.angle, p.number) for p in cr.pages]
             lines.append(f"kiểm tra trang (tiến trình con): {[(p.angle, p.number) for p in cr.pages]} → "
-                         f"thứ tự {plan.order}, xoay {plan.rotate}")
+                         f"thứ tự {plan.order}, xoay {plan.rotate}; đọc song song giống tuần tự: {same}")
+            ok &= same
             ok &= plan.order == [1, 0] and plan.rotate == {1: 180} and \
                 pagecheck.job_fix((ck, ck, plan.order, plan.rotate, False)) == ""
         else:
             lines.append("đọc số trang: máy không có Windows OCR – bỏ qua")
+        # thùng rác + cắt viền (dữ liệu app tạm thời trỏ vào thư mục làm việc của selftest, không đụng thùng rác thật)
+        from pdfread_pro.core import trash as TR
+        prev_appdata = os.environ.get("APPDATA")
+        os.environ["APPDATA"] = os.path.join(work, "appdata")
+        try:
+            tp = os.path.join(work, "thung_rac.pdf")
+            td = pymupdf.open()
+            for k in range(4):
+                td.new_page(width=300, height=400).insert_text((40, 60), f"T{k}")
+            td.save(tp)
+            td.close()
+            pagecheck.delete_pages(tp, [1])
+            pagecheck.crop_pages(tp, {0: (0, 0, 0.5, 1)})
+            ent = next(e for e in TR.list_entries() if e.kind == TR.KIND_PAGES)
+            res_ok = TR.restore(ent)[0]
+            with pymupdf.open(tp) as chk:
+                tr_ok = res_ok and chk.page_count == 4 and round(chk[0].rect.width) == 150
+            lines.append(f"thùng rác + cắt viền: khôi phục trang {'đạt' if tr_ok else 'LỖI'}")
+            ok &= bool(tr_ok)
+        finally:
+            if prev_appdata is None:
+                os.environ.pop("APPDATA", None)
+            else:
+                os.environ["APPDATA"] = prev_appdata
         from pdfread_pro.core import report as RP, scanner as SC
         from pdfread_pro.core.report_excel import export_excel
         hs = os.path.join(work, "Ho so so hoa", "Chi bo 1", "056123456789_PhamVanA")
@@ -132,7 +159,6 @@ def main() -> int:
     from PySide6.QtGui import QFont, QIcon
     from PySide6.QtWidgets import QApplication
     from pdfread_pro import paths
-    from PySide6.QtCore import QSettings
     from pdfread_pro.ui import theme
     from pdfread_pro.ui.styles import set_theme
     theme.install()                          # bọc hàm đặt màu trước khi dựng giao diện (giao diện tối)
@@ -149,10 +175,13 @@ def main() -> int:
     if os.path.isfile(paths.icon_path()):
         app.setWindowIcon(QIcon(paths.icon_path()))
     app.setStyle("Fusion")
+    from pdfread_pro.ui import styles
+    qs = paths.make_settings()
+    styles.load_font_settings(qs)
     font = QFont("Segoe UI")
-    font.setPointSizeF(9.5)
+    font.setPointSizeF(styles.FONT_BASE_PT * styles.font_settings()[0])
     app.setFont(font)
-    set_theme(app, QSettings("PDFReadPro", "PDFReadPro").value("theme", "light"))
+    set_theme(app, qs.value("theme", "light"))
     win = MainWindow()
     win.showMaximized()
     if len(sys.argv) > 1 and os.path.isdir(sys.argv[1]):

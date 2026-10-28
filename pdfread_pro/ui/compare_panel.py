@@ -2,11 +2,13 @@
 Khoá chính là số CCCD; người dùng tự chọn cột CCCD / Họ tên / Chi bộ. Có thao tác sửa (xác nhận + hoàn tác)."""
 from __future__ import annotations
 
+from ..paths import make_settings
+
 import json
 import os
 from typing import Dict, List, Optional
 
-from PySide6.QtCore import QSettings, Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QCursor, QFont
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFileDialog, QGridLayout, QGroupBox,
                                QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu, QMessageBox, QSpinBox, QTableWidget,
@@ -32,7 +34,7 @@ class ComparePanel(QWidget):
     def __init__(self, report_provider, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.report_provider = report_provider    # hàm trả R.Report hiện hành (theo thiết lập tab Báo cáo)
-        self.settings = QSettings("PDFReadPro", "PDFReadPro")
+        self.settings = make_settings()
         self.table: Optional[C.Table] = None
         self.cmp: Optional[C.Comparison] = None
         self.last_ops: List[C.Op] = []

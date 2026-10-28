@@ -30,7 +30,7 @@ LIGHT_TO_DARK = {
     # nền nhạt (dòng bảng, thẻ, ô tô màu)
     "#DCFCE7": "#14432A", "#BBF7D0": "#1B5E3A", "#FEE2E2": "#4C1D1D", "#FEF2F2": "#3F1C1C", "#FEF9C3": "#4A3B0B",
     "#FEF3C7": "#4A3A10", "#FDE68A": "#5C4A12", "#FFF7ED": "#3D2A14", "#FFEDD5": "#4A2E12", "#FED7AA": "#5A3514",
-    "#DBEAFE": "#1E3A66", "#BFDBFE": "#2B4C8C", "#EFF6FF": "#172B4D", "#F8FAFC": "#0F1729", "#F1F5F9": "#172033",
+    "#DBEAFE": "#1E3A66", "#EDE9FE": "#2E1F5C", "#BFDBFE": "#2B4C8C", "#EFF6FF": "#172B4D", "#F8FAFC": "#0F1729", "#F1F5F9": "#172033",
 }
 assert not set(LIGHT_TO_DARK.values()) & set(LIGHT_TO_DARK), "màu tối trùng màu sáng"
 

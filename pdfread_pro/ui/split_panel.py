@@ -493,7 +493,7 @@ class SplitPanel(QWidget):
         self.ed_pages.setToolTip("Để trống = xuất tất cả trang kết quả. Ví dụ: 1-4, 7, 9-")
         sl.addWidget(self.ed_pages)
         self.ck_over = QCheckBox("💾 Lưu đè file gốc")
-        self.ck_over.setToolTip("Thay file gốc bằng file đã tách; bản gốc được sao lưu vào thư mục _backup_goc")
+        self.ck_over.setToolTip("Thay file gốc bằng file đã tách; bản gốc được sao lưu vào Thùng rác của app")
         self.ck_over.toggled.connect(lambda on: self.ed_out.setEnabled(not on))
         sl.addWidget(self.ck_over)
         self.ck_open = QCheckBox("📂 Tự mở file khi xuất")
@@ -902,7 +902,7 @@ class SplitPanel(QWidget):
             QMessageBox.information(self, "Thông báo", "Vui lòng chọn đường dẫn file kết quả.")
             return
         if over:
-            msg = "Thay file gốc bằng file đã tách?\nBản gốc được sao lưu vào thư mục _backup_goc bên cạnh."
+            msg = "Thay file gốc bằng file đã tách?\nBản gốc được sao lưu vào Thùng rác của app."
             if self.info and self.info.has_signature:
                 msg += "\n\n⚠ File gốc có chữ ký số – file mới sẽ KHÔNG còn chữ ký hợp lệ."
             if QMessageBox.question(self, "Lưu đè file gốc", msg) != QMessageBox.Yes:

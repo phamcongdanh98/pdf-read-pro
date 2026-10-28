@@ -2,12 +2,12 @@
 ; Cài bản dạng thư mục: không phải giải nén mỗi lần mở → mở nhanh gấp đôi bản 1 file.
 [Setup]
 AppName=PDF-Read Pro
-AppVersion=1.9.0
+AppVersion=1.9.1
 DefaultDirName={localappdata}\Programs\PDFReadPro
 DefaultGroupName=PDF-Read Pro
 PrivilegesRequired=lowest
 OutputDir=dist
-OutputBaseFilename=Setup_PDFReadPro_1.9.0
+OutputBaseFilename=Setup_PDFReadPro_1.9.1
 Compression=lzma2
 SolidCompression=yes
 SetupIconFile=assets\app.ico

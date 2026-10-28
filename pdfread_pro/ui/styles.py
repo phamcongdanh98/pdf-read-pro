@@ -25,6 +25,28 @@ DARK = {
 THEMES = {"light": LIGHT, "dark": DARK}
 _current = LIGHT
 
+# Cỡ chữ + độ đậm (người dùng chọn ở nút «Aa» trên banner; lưu trong QSettings: font_scale, font_bold)
+FONT_BASE_PT = 9.5
+FONT_SCALES = (("Vừa", 1.0), ("Lớn", 1.12), ("Rất lớn", 1.25), ("Cực lớn", 1.4))
+DEFAULT_SCALE, DEFAULT_BOLD = 1.12, True
+_font_scale, _font_bold = DEFAULT_SCALE, DEFAULT_BOLD
+
+
+def font_settings() -> tuple:
+    return _font_scale, _font_bold
+
+
+def load_font_settings(settings) -> None:
+    """Đọc cỡ chữ / độ đậm đã lưu (gọi trước khi áp giao diện lúc khởi động)."""
+    global _font_scale, _font_bold
+    try:
+        sc = float(settings.value("font_scale", DEFAULT_SCALE))
+        _font_scale = sc if 0.8 <= sc <= 1.6 else DEFAULT_SCALE
+    except (TypeError, ValueError):
+        _font_scale = DEFAULT_SCALE
+    v = settings.value("font_bold", DEFAULT_BOLD)
+    _font_bold = v in (True, "true", "1", 1)
+
 
 def current() -> dict:
     return _current
@@ -203,9 +225,31 @@ MAIN_STYLE = build_style(LIGHT)          # tương thích ngược
 def full_style(t: dict | None = None) -> str:
     """Stylesheet đầy đủ (gồm icon ô tích / mũi tên) theo giao diện `t` (mặc định: đang dùng).
     Gọi sau khi đã tạo QApplication."""
+    import re
     from .icons import icon_style
     t = t or _current
-    return build_style(t) + icon_style(t)
+    css = build_style(t) + icon_style(t)
+    if abs(_font_scale - 1.0) > 0.01:                    # nhân mọi cỡ chữ (pt) trong stylesheet theo hệ số người dùng chọn
+        css = re.sub(r"font-size:\s*([\d.]+)pt", lambda m: f"font-size: {float(m.group(1)) * _font_scale:.1f}pt", css)
+    if _font_bold:                                       # chữ đậm vừa (semibold) cho nội dung – dễ đọc hơn
+        css = css.replace("font-weight: normal", "font-weight: 600")
+        css += ("\nQLabel, QCheckBox, QRadioButton, QComboBox, QLineEdit, QSpinBox, QTableView, QTreeView, QListView, "
+                "QTextBrowser { font-weight: 600; }\nQLabel#Hint { font-weight: 500; }\n")
+    return css
+
+
+def set_font(app, scale: float | None = None, bold: bool | None = None) -> None:
+    """Đổi cỡ chữ / độ đậm ngay khi đang chạy."""
+    global _font_scale, _font_bold
+    from PySide6.QtGui import QFont
+    if scale is not None:
+        _font_scale = scale
+    if bold is not None:
+        _font_bold = bool(bold)
+    f = QFont("Segoe UI")
+    f.setPointSizeF(FONT_BASE_PT * _font_scale)
+    app.setFont(f)
+    app.setStyleSheet(full_style(_current))
 
 
 def button(text: str, color: str = "primary", slot=None, tip: str = "", size: str = ""):

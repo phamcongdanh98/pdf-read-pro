@@ -6,6 +6,7 @@ theo ngữ cảnh ("Trang 7")."""
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import re
 from typing import Iterable, List, Optional, Sequence, Tuple
 
@@ -17,6 +18,23 @@ _TO_DIGIT = str.maketrans({"l": "1", "I": "1", "|": "1", "i": "1", "!": "1", "O"
 
 _engine = None
 _checked = False
+# nhóm engine dùng khi đọc song song nhiều trang (mỗi engine chỉ chạy 1 lệnh nhận dạng một lúc)
+_POOL: "contextvars.ContextVar[Optional[asyncio.Queue]]" = contextvars.ContextVar("ocr_pool", default=None)
+
+
+def _create_engine():
+    from winrt.windows.globalization import Language
+    from winrt.windows.media.ocr import OcrEngine
+    eng = None
+    for tag in ("en-US", "en-GB", "vi-VN"):
+        try:
+            if OcrEngine.is_language_supported(Language(tag)):
+                eng = OcrEngine.try_create_from_language(Language(tag))
+                if eng:
+                    break
+        except Exception:
+            pass
+    return eng or OcrEngine.try_create_from_user_profile_languages()
 
 
 def _get_engine():
@@ -25,18 +43,7 @@ def _get_engine():
         return _engine
     _checked = True
     try:
-        from winrt.windows.globalization import Language
-        from winrt.windows.media.ocr import OcrEngine
-        eng = None
-        for tag in ("en-US", "en-GB", "vi-VN"):
-            try:
-                if OcrEngine.is_language_supported(Language(tag)):
-                    eng = OcrEngine.try_create_from_language(Language(tag))
-                    if eng:
-                        break
-            except Exception:
-                pass
-        _engine = eng or OcrEngine.try_create_from_user_profile_languages()
+        _engine = _create_engine()
     except Exception:
         _engine = None
     return _engine
@@ -54,7 +61,15 @@ async def _ocr_lines(im: Image.Image) -> List[str]:
     w = DataWriter()
     w.write_bytes(im.tobytes())
     bmp = SoftwareBitmap.create_copy_from_buffer(w.detach_buffer(), BitmapPixelFormat.GRAY8, im.width, im.height)
-    res = await _get_engine().recognize_async(bmp)
+    pool = _POOL.get()
+    if pool is None:
+        res = await _get_engine().recognize_async(bmp)
+    else:
+        eng = await pool.get()
+        try:
+            res = await eng.recognize_async(bmp)
+        finally:
+            pool.put_nowait(eng)
     return [ln.text for ln in res.lines]
 
 
@@ -251,11 +266,15 @@ async def _page_info(img: Image.Image, max_page: int) -> Tuple[Optional[int], Op
 
 
 def page_infos(images: Iterable[Image.Image], max_page: int = 999,
-               progress=None, cancelled=None) -> List[Tuple[Optional[int], Optional[int]]]:
+               progress=None, cancelled=None, concurrency: int = 1) -> List[Tuple[Optional[int], Optional[int]]]:
     """Mỗi ảnh trang → (góc cần xoay để đứng thuận 0/90/180/270 hoặc None, số trang in hoặc None).
-    `images` có thể là generator (vẽ từng trang khi cần – đỡ tốn RAM với file nhiều trang)."""
+    `images` có thể là generator (vẽ từng trang khi cần – đỡ tốn RAM với file nhiều trang).
+    concurrency > 1: đọc song song tối đa ngần ấy trang (mỗi trang một engine OCR) – kết quả GIỐNG HỆT đọc tuần tự,
+    nhanh gấp ~2–3 lần (vẽ trang tiếp theo trong lúc OCR đang chạy)."""
     if not available():
         raise RuntimeError("Máy không có Windows OCR (cần Windows 10/11).")
+    if concurrency > 1:
+        return asyncio.run(_page_infos_parallel(images, max_page, progress, cancelled, concurrency))
 
     async def run():
         out = []
@@ -288,3 +307,55 @@ def read_pages(images: Sequence[Image.Image], max_page: int = 999,
         return out
 
     return asyncio.run(run())
+
+
+async def _page_infos_parallel(images, max_page, progress, cancelled, n):
+    engines = [_get_engine()]
+    for _ in range(n - 1):
+        try:
+            e = _create_engine()
+        except Exception:
+            e = None
+        if e is not None:
+            engines.append(e)
+    pool: asyncio.Queue = asyncio.Queue()
+    for e in engines:
+        pool.put_nowait(e)
+    n = len(engines)
+    token = _POOL.set(pool)
+    out: dict = {}
+
+    async def one(i: int, im: Image.Image):
+        out[i] = await _page_info(im, max_page)
+        if progress:
+            progress(len(out))
+
+    try:
+        tasks: set = set()
+        idx = 0
+        sentinel = object()
+        it = iter(images)
+        while not (cancelled and cancelled()):
+            while len(tasks) >= n:
+                done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                for d in done:
+                    d.result()
+            im = next(it, sentinel)                      # vẽ trang kế tiếp trong lúc các trang trước đang OCR
+            if im is sentinel:
+                break
+            if im is None:
+                out[idx] = (None, None)
+                if progress:
+                    progress(len(out))
+            else:
+                tasks.add(asyncio.create_task(one(idx, im)))
+            idx += 1
+            await asyncio.sleep(0)
+        if tasks:
+            await asyncio.gather(*tasks)
+    finally:
+        _POOL.reset(token)
+    done_n = 0
+    while done_n in out:
+        done_n += 1
+    return [out[i] for i in range(done_n)]
