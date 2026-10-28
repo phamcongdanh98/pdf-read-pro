@@ -7,7 +7,7 @@ import threading
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, QUrl, Qt, Signal
 from PySide6.QtGui import QDesktopServices, QImage, QPixmap
-from PySide6.QtWidgets import (QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QScrollArea, QSizePolicy,
+from PySide6.QtWidgets import (QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QSplitter,
                                QSpinBox, QVBoxLayout, QWidget)
 
 from .styles import button
@@ -121,7 +121,9 @@ class _Area(QScrollArea):
 
 
 class PreviewPane(QWidget):
-    def __init__(self, parent: QWidget | None = None, title: str = "Xem Trước File PDF"):
+    shown = Signal()                     # vừa chọn xem 1 file (khung gập tự mở ra)
+
+    def __init__(self, parent: QWidget | None = None, title: str = "Xem trước file PDF"):
         super().__init__(parent)
         self.pool = QThreadPool(self)
         self.pool.setMaxThreadCount(1)
@@ -210,7 +212,7 @@ class PreviewPane(QWidget):
         for b in (self.btn_rl, self.btn_r180, self.btn_rr):
             rot.addWidget(b, 1)
         lay.addLayout(rot)
-        self.btn_open = button("📂 Mở Tệp PDF Này", "primary", self.open_external, "Mở bằng phần mềm đọc PDF mặc định")
+        self.btn_open = button("📂 Mở file PDF này", "primary", self.open_external, "Mở bằng phần mềm đọc PDF mặc định")
         lay.addWidget(self.btn_open)
 
         self._debounce = QTimer(self)
@@ -247,6 +249,7 @@ class PreviewPane(QWidget):
         self.lbl_file.setToolTip(path)
         self._enable(True)
         self._debounce.start()
+        self.shown.emit()
 
     def clear(self, message: str = "Vui lòng chọn 1 file .pdf\ntrong danh sách để xem trước") -> None:
         self.path = ""
@@ -360,3 +363,43 @@ class PreviewPane(QWidget):
         bar = self.area.verticalScrollBar()
         QTimer.singleShot(0, lambda: bar.setValue(bar.maximum() if self._to_bottom else 0))
         self._to_bottom = False
+
+
+def make_collapsible(split: QSplitter, preview: PreviewPane, opened: int = 400):
+    """Khung xem trước bên phải GẬP được: mặc định gập để bảng chiếm hết bề ngang (thấy đủ cột Trạng thái / Vấn đề);
+    chọn 1 file thì tự mở, bấm nút để gập lại (người dùng đã gập thì không tự mở nữa). Trả về nút bật / tắt để đặt vào hàng nút."""
+    split.setChildrenCollapsible(True)
+    split.setCollapsible(0, False)
+    split.setCollapsible(1, True)
+    btn = button("👁 Xem trước", "light", None, "Hiện / ẩn khung xem trước PDF (tự mở khi chọn 1 file)", "sm")
+    btn.setCheckable(True)
+    state = {"manual_closed": False}
+
+    def is_open() -> bool:
+        return split.sizes()[1] > 0
+
+    def sync(*_):
+        btn.blockSignals(True)
+        btn.setChecked(is_open())
+        btn.blockSignals(False)
+
+    def set_open(on: bool):
+        total = max(sum(split.sizes()), opened + 400)
+        split.setSizes([total - opened, opened] if on else [total, 0])
+        sync()
+
+    def toggled(on: bool):
+        state["manual_closed"] = not on
+        set_open(on)
+
+    def auto_open():
+        if not is_open() and not state["manual_closed"]:
+            set_open(True)
+
+    btn.toggled.connect(toggled)
+    split.splitterMoved.connect(sync)
+    preview.shown.connect(auto_open)
+    split.setSizes([10000, 0])
+    sync()
+    btn.set_open = set_open
+    return btn

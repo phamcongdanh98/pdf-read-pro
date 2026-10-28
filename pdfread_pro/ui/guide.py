@@ -134,6 +134,23 @@ Bấm 1 chi bộ xem tổng hợp và danh sách người còn thiếu; bấm 1 
 Chi tiết file · Thống kê giấy tờ (124 mã) · Vấn đề cần xử lý. Sẵn khổ A4 ngang, có nút lọc ở dòng tiêu đề.</li>
 </ul>
 
+<h3 style="color:#1D4ED8">7a. Tab Quy trình – 1 click (đổi tên → nén → gom để ký)</h3>
+<ol>
+<li>Quét thư mục hồ sơ (chi bộ hoặc cả Hồ sơ số hóa) ở ô trên cùng. Chọn quy tắc đổi tên ở tab <b>Đổi tên</b> (mặc định bộ 1361);
+đặt dung lượng tối đa mỗi trang (mặc định <b>250 KB</b>).</li>
+<li>Bấm <b>🚀 CHẠY CẢ QUY TRÌNH</b>. App <b>kiểm tra trước</b> (không ghi gì) và hiện tóm tắt: bao nhiêu file sẽ đổi tên, ước tính
+bao nhiêu file cần nén, bao nhiêu file gom để ký, cảnh báo, dung lượng ổ cần. Đồng ý thì chạy.</li>
+<li>App <b>chép hồ sơ sang bản làm việc</b> rồi đổi tên → nén → gom <b>trên bản chép</b>. <b>Hồ sơ gốc không bao giờ bị sửa.</b></li>
+<li>Xong: xem bảng kết quả từng file (tích <b>⚠ Chỉ file cần xem</b>), <b>📊 Xuất Excel</b>, rồi <b>ký số hàng loạt</b> các file trong
+thư mục gom. Ký xong bấm <b>➡ Sang tab Gom ký số</b> để chép bộ hồ sơ đã ký ra <code>… - Đã ký</code>.</li>
+</ol>
+<ul>
+<li>File đã ký số được giữ nguyên (nén sẽ làm hỏng chữ ký). File nén ra bị hỏng / lệch số trang được <b>tự khôi phục từ hồ sơ gốc</b>.</li>
+<li>Một bước lỗi → các bước sau không chạy; <b>■ Dừng</b> bất cứ lúc nào. Làm lại: <b>🗑 Xoá kết quả</b> (vào Thùng rác) rồi chạy lại;
+chạy lần 2 mà chưa xoá thì app tự đặt tên thư mục mới <code>(2)</code>, không ghi chồng.</li>
+<li>Cần thêm chỗ trống bằng đúng dung lượng hồ sơ (bản chép) – app báo trước nếu ổ không đủ.</li>
+</ul>
+
 <h3 style="color:#1D4ED8">7b. Tab Gom ký số (ký hàng loạt nhiều hồ sơ)</h3>
 <ol>
 <li>Quét thư mục <b>chi bộ</b> (hoặc cả Hồ sơ số hóa) có các thư mục hồ sơ <code>CCCD_HoVaTen</code>
@@ -141,27 +158,34 @@ Chi tiết file · Thống kê giấy tờ (124 mã) · Vấn đề cần xử l
 <li>Bấm <b>① GOM ĐỂ KÝ</b>: app <b>chép</b> các file <b>chưa ký</b> vào thư mục gom, tên thêm đuôi hồ sơ:
 <code>01.Ly_lich_nguoi_xin_vao_Dang_056123456789_TranVanThai.pdf</code>. File gốc giữ nguyên.</li>
 <li>Mở thư mục gom, <b>ký số hàng loạt</b> bằng phần mềm ký (phần mềm tạo thêm file <code>….signed.pdf</code>).</li>
-<li>Bấm <b>🔍 Kiểm tra trả về</b> để xem trước, rồi <b>② TRẢ VỀ SAU KÝ</b>: bản đã ký về đúng hồ sơ, bỏ đuôi
+<li>Bấm thẻ <b>② Trả về sau ký</b> (bảng hiện ngay các bản đã ký), rồi nút <b>② CHÉP RA THƯ MỤC MỚI</b> /
+<b>② TRẢ VỀ HỒ SƠ GỐC</b>: bản đã ký về đúng hồ sơ, bỏ đuôi
 (<code>01.Ly_lich_nguoi_xin_vao_Dang.signed.pdf</code>); bản sao chưa ký giống bản gốc được xoá; file chưa ký xong
 giữ lại trong thư mục gom để ký tiếp.</li>
 </ol>
-<ul><li><b>② Sau ký</b> có 2 cách: <b>Trả về thư mục hồ sơ gốc</b> (như trên) hoặc <b>Chép ra thư mục mới</b>
-(mặc định): hồ sơ gốc và thư mục gom giữ nguyên; thư mục mới có cùng cây <code>Chi bộ\\CCCD_HoVaTen</code>, chứa bản
-<code>.signed</code> + bản chưa ký đã bỏ đuôi; bật <b>Chép kèm đủ bộ hồ sơ</b> để chép thêm các file khác của hồ sơ.</li>
+<ul><li>Tab chia làm <b>2 bước</b> (2 thẻ ở đầu tab): mỗi bước chỉ hiện thiết lập và nút của nó; các tuỳ chọn ít dùng nằm trong
+<b>▸ Tuỳ chọn nâng cao</b> (bấm để mở). Nút to màu ở góc phải dưới là việc chính; việc phụ (mở thư mục, tách file, xuất Excel)
+nằm trong menu <b>⋯ Thêm</b>. Dòng chữ xanh ở dưới trái luôn nói bước tiếp theo.</li>
+<li><b>② Sau ký</b> có 2 cách: <b>Chép ra thư mục mới</b> (khuyên dùng): hồ sơ gốc và thư mục gom giữ nguyên, thư mục mới có
+cùng cây <code>Chi bộ\\CCCD_HoVaTen</code>, chứa bản <code>.signed</code> + bản chưa ký đã bỏ đuôi (nâng cao: <b>Chép kèm đủ bộ
+hồ sơ</b> để chép thêm các file khác của hồ sơ); hoặc <b>Trả về thẳng thư mục hồ sơ gốc</b> (như trên).</li>
 <li>Không bao giờ ghi đè: trùng tên mà khác nội dung → báo <b>xung đột</b>, giữ lại. Có <b>↶ Hoàn tác</b>.</li>
 <li>File <code>_gom_ky_so.json</code> trong thư mục gom là <b>sổ ghi</b> (file nào của hồ sơ nào), được ẩn; cứ để nguyên khi ký
 – phần mềm ký chỉ ký PDF. Lỡ xoá sổ vẫn trả về được theo đuôi <code>_CCCD_HoVaTen</code>.</li>
 <li><b>🛡 Kiểm tra chữ ký số thật + số trang</b> (bật sẵn): bản ký chỉ được nhận khi có chữ ký số thật (không chỉ đổi
 tên .signed), chữ ký không hỏng, mở được, cùng số trang bản gốc, phần mềm ký đã ghi xong và bản gốc không bị thay sau khi
-gom. Sai → giữ lại, cột <b>Ghi chú</b> nói lý do; tích <b>⚠ Chỉ dòng cần xử lý</b> để xem nhanh.</li>
-<li><b>Chia lô</b> khi gom: theo chi bộ hoặc mỗi lô N file (thư mục con) – ký từng lô. Phần mềm ký ghi ra thư mục con
+gom. Sai → giữ lại, cột <b>Ghi chú</b> nói lý do; ô <b>Hiện</b> chọn <i>Cần xử lý</i> để xem nhanh các dòng lỗi
+(<i>Việc sẽ làm</i> = chỉ các file app sẽ chép / trả về).</li>
+<li><b>Chia lô</b> khi gom (nâng cao): theo chi bộ hoặc mỗi lô N file (thư mục con) – ký từng lô. Phần mềm ký ghi ra thư mục con
 <code>Signed\\</code>, đặt đuôi <code>_signed</code> / <code>_ky</code> hay ký đè lên file đều được nhận.</li>
-<li><b>👁 Tự cập nhật khi đang ký</b>: bảng tự kiểm tra lại khi có file mới, dòng trên bảng ghi <i>Đã ký hợp lệ X / Y văn bản</i>.</li>
-<li><b>📦 Tách file cần ký lại</b>: file chưa ký → thư mục <code>Ký lại &lt;ngày giờ&gt;</code> để ký riêng phần còn thiếu;
-bản ký lỗi → <code>_Bản ký lỗi</code>. <b>📊 Xuất Excel</b>: tổng hợp theo hồ sơ + chi tiết. Ô tìm kiếm không cần dấu.</li>
+<li><b>👁 Tự cập nhật khi đang ký</b> (nâng cao, bật sẵn): bảng tự kiểm tra lại khi có file mới; dòng tóm tắt màu trên bảng ghi
+<span style="color:#15803D">✔ bản đã ký hợp lệ</span> · <span style="color:#B45309">⏳ chưa ký</span> ·
+<span style="color:#DC2626">⚠ cần xử lý</span>.</li>
+<li><b>⋯ Thêm ▸ 📦 Tách file cần ký lại</b>: file chưa ký → thư mục <code>Ký lại &lt;ngày giờ&gt;</code> để ký riêng phần còn thiếu;
+bản ký lỗi → <code>_Bản ký lỗi</code>. <b>⋯ Thêm ▸ 📊 Xuất Excel</b>: tổng hợp theo hồ sơ + chi tiết. Ô tìm kiếm không cần dấu.</li>
 <li><b>↶ Hoàn tác</b> nhớ cả sau khi tắt app. Ổ không đủ chỗ → báo trước khi chép; đường dẫn quá dài → cảnh báo.</li>
-<li>Trả về / chép ra <b>không cần quét lại</b>: chỉ cần <b>📁 Chọn…</b> đúng thư mục gom rồi bấm <b>🔍 Kiểm tra trả về</b> –
-app đọc sổ ghi để biết thư mục hồ sơ gốc và tự đặt thư mục mới là <code>&lt;thư mục hồ sơ&gt; - Đã ký</code>.</li></ul>
+<li>Trả về / chép ra <b>không cần quét lại</b>: chỉ cần <b>📁 Chọn…</b> đúng thư mục gom – bảng ② hiện ngay (bấm
+<b>🔄 Kiểm tra lại</b> khi cần đọc lại) – app đọc sổ ghi để biết thư mục hồ sơ gốc và tự đặt thư mục mới là <code>&lt;thư mục hồ sơ&gt; - Đã ký</code>.</li></ul>
 
 <h3 style="color:#1D4ED8">8. Tab Đối chiếu danh sách (so với file Excel của hệ thống)</h3>
 <ul>
@@ -193,6 +217,11 @@ Ngoài danh sách · Cần sửa · Giải thích.</li>
 
 <h2 style="color:#1E40AF;margin-top:18px">📋 Lịch sử phiên bản</h2>
 <ul>
+<li><b>1.9.0</b> – Tab mới <b>Quy trình</b>: 1 click chạy tuần tự <b>đổi tên → giảm dung lượng (250 KB/trang) → gom file
+chưa ký để ký số</b> trên bản chép (hồ sơ gốc không bị sửa), kiểm tra trước + xác nhận, tự khôi phục file nén lỗi, dừng được
+bất cứ lúc nào, bảng kết quả + xuất Excel, bàn giao sang tab Gom ký số. Sổ gom ghi thư mục gốc nên chép ra thư mục mới giữ
+đúng cây Chi bộ. Tab <b>Gom ký số làm lại gọn</b> theo 2 bước (2 thẻ, tuỳ chọn nâng cao gập lại, 1 nút chính, bảng 4 cột có
+biểu tượng, gợi ý bước tiếp theo); thứ tự tab xếp theo trình tự làm việc. Chép ra thư mục mới: <b>tự đặt tên thư mục không trùng</b> (thêm (2)), hộp xác nhận ghi số hồ sơ + dung lượng và <b>cảnh báo hồ sơ chưa ký / bản ký lỗi</b> (mặc định “Không”), nút <b>⏹ Dừng</b>, tóm tắt đối chiếu sau chép (đủ N/M file, 0 lỗi); kiểm tra lại sau chép nhanh hơn nhiều. <b>Giao diện gọn hơn:</b> thanh thư mục nguồn còn 1 hàng (nút ✕ trong ô thay “Clear”, việc phụ gom vào menu 🧰 Công cụ), khung xem trước ở tab Đổi tên / Nén PDF / Kiểm tra trang <b>gập được</b> (tự mở khi chọn file, nút 👁 Xem trước), tên tab ngắn gọn, chữ tiếng Việt thống nhất.</li>
 <li><b>1.8.0</b> – Tab mới <b>Kiểm tra trang</b>: phát hiện trang ngược / nằm ngang, sai thứ tự, thiếu / trùng số trang,
 trang trắng và sửa tự động. Tab Giảm dung lượng: khung xem trước <b>cao hết tab</b> như Tổng quan. Tab Tách trang:
 hộp <b>chọn file có tìm kiếm</b> (thay danh sách thả xuống dài), nút file trước / sau, kéo thả, chọn kiểu tách bằng

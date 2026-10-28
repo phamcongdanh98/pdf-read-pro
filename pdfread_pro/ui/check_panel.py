@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFileDialog, QGroup
 from ..core import activity, compressor as C, pagecheck as K, pagenum
 from ..core.models import FileInfo
 from .common import fmt
-from .preview import PreviewPane
+from .preview import PreviewPane, make_collapsible
 
 ROTATE_TEXT = {90: "xoay 90° sang trái", 180: "xoay 180°", 270: "xoay 90° sang phải"}
 GREEN, AMBER, RED, GRAY, TEXT = "#15803D", "#B45309", "#DC2626", "#64748B", "#1E293B"
@@ -153,7 +153,7 @@ class CheckPanel(QWidget):
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Interactive)
         hh.setStretchLastSection(True)
-        for i, w in enumerate((44, 260, 130, 52, 90, 330, 150)):
+        for i, w in enumerate((44, 260, 130, 56, 115, 300, 150)):
             self.table.setColumnWidth(i, w)
         self.table.itemSelectionChanged.connect(self.show_selected)
         self.table.cellDoubleClicked.connect(lambda r, c: self.preview.open_external())
@@ -212,7 +212,7 @@ class CheckPanel(QWidget):
         lay.addLayout(bot)
 
         # ---- xem trước cao hết tab (như Tổng quan): bản gốc ↔ bản đã sửa
-        pbox = QGroupBox("Xem Trước File PDF")
+        pbox = QGroupBox("Xem trước file PDF")
         pl = QVBoxLayout(pbox)
         pl.setContentsMargins(8, 8, 8, 8)
         sw = QHBoxLayout()
@@ -233,8 +233,8 @@ class CheckPanel(QWidget):
         split.addWidget(pbox)
         split.setStretchFactor(0, 66)
         split.setStretchFactor(1, 34)
-        split.setSizes([900, 480])
-        split.setChildrenCollapsible(False)
+        btn_prev = make_collapsible(split, self.preview)
+        bot.insertWidget(2, btn_prev)           # cạnh thanh tiến trình, trước các nút chính
 
         self.mode_changed()
         self._enable_actions()

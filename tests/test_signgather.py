@@ -114,7 +114,17 @@ class SignGatherTests(unittest.TestCase):
         self.assertEqual(st[(A, "01.Ly_lich_nguoi_xin_vao_Dang.pdf")], G.R_COPY)
         self.assertEqual(st[(A, "02.Ly_lich_dang_vien.signed.pdf")], G.R_EXTRA)
         self.assertIn(G.R_WAIT, [it.status for it in plan if it.folder == B])
+        todo = [it for it in plan if it.status in G.COPY_ACTIONS]
+        nd, size = G.describe(todo)
+        self.assertEqual(nd, 1)
+        self.assertGreater(size, 0)
         j = G.do_return(plan, copy=True)
+        ok, bad = G.verify_copy([it for it in todo if it.dest])                 # đối chiếu sau chép: đủ, đúng dung lượng
+        self.assertEqual((ok, bad), (len(todo), []))
+        os.remove(todo[0].dest)
+        ok, bad = G.verify_copy([it for it in todo if it.dest])
+        self.assertEqual((ok, bad), (len(todo) - 1, [todo[0].dest]))             # thiếu file → báo đúng file đó
+        shutil.copy2(todo[0].path, todo[0].dest)
         self.assertEqual(sorted(os.listdir(oa)), ["01.Ly_lich_nguoi_xin_vao_Dang.pdf",
                                                   "01.Ly_lich_nguoi_xin_vao_Dang.signed.pdf",
                                                   "02.Ly_lich_dang_vien.pdf", "02.Ly_lich_dang_vien.signed.pdf"])
@@ -168,6 +178,36 @@ class SignGatherTests(unittest.TestCase):
         plan = G.plan_return(self.gdir, [self.root], verify=False)
         self.assertLess(time.perf_counter() - t, 3.0)
         self.assertEqual(sum(1 for it in plan if it.status == G.R_SIGNED), 1500)
+
+    def test_looks_like_gather(self):
+        self.assertFalse(G.looks_like_gather(self.gdir))                      # chưa có
+        os.makedirs(self.gdir)
+        self.assertFalse(G.looks_like_gather(self.gdir))                      # rỗng
+        touch(os.path.join(self.gdir, "lung_tung.pdf"))
+        self.assertFalse(G.looks_like_gather(self.gdir))                      # PDF bất kỳ không phải thư mục gom
+        touch(os.path.join(self.gdir, A01 + ".signed.pdf"))
+        self.assertTrue(G.looks_like_gather(self.gdir))                       # tên có đuôi _CCCD_HoVaTen
+        os.remove(os.path.join(self.gdir, A01 + ".signed.pdf"))
+        touch(os.path.join(self.gdir, G.MANIFEST), b"{}")
+        self.assertTrue(G.looks_like_gather(self.gdir))                       # có sổ ghi
+
+    def test_count_dossiers_detects_source_folder(self):
+        """Chọn nhầm thư mục HỒ SƠ làm thư mục gom: nhận ra (chi bộ / cả Hồ sơ số hóa), thư mục thường thì không."""
+        self.assertEqual(G.count_dossiers(self.root), 2)                      # chi bộ: 2 thư mục CCCD_HoVaTen
+        self.assertEqual(G.count_dossiers(self.tmp), 2)                       # cấp trên (Hồ sơ số hóa) cũng nhận ra
+        os.makedirs(self.gdir)
+        self.assertEqual(G.count_dossiers(self.gdir), 0)
+        self.assertEqual(G.count_dossiers(os.path.join(self.tmp, "khong_co")), 0)
+
+    def test_manifest_root_keeps_tree_even_with_single_chi_bo(self):
+        """Sổ ghi thư mục gốc lúc gom → chép ra thư mục mới giữ nguyên tầng Chi bộ (không đoán từ thư mục chung)."""
+        G.gather(G.plan_gather(scanner.scan(self.tmp).files, self.gdir), self.gdir, root=self.tmp)
+        self.assertEqual(G.guess_root(self.gdir), os.path.abspath(self.tmp))
+        touch(os.path.join(self.gdir, A01 + ".signed.pdf"), b"k")
+        out = os.path.join(self.tmp, "Da ky")
+        plan = G.plan_return(self.gdir, [G.guess_root(self.gdir)], out, full=False, verify=False)
+        dest = [it.dest for it in plan if it.status == G.R_SIGNED][0]
+        self.assertEqual(dest, os.path.join(out, "Chi bo 1", A, "01.Ly_lich_nguoi_xin_vao_Dang.signed.pdf"))
 
     def test_undo_gather(self):
         j = self.gather_all()

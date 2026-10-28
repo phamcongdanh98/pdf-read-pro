@@ -5,7 +5,7 @@ import os
 import sys
 
 APP_NAME = "PDF-Read Pro"
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.9.0"
 
 
 def data_dir() -> str:

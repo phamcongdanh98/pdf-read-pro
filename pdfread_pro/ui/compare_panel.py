@@ -47,7 +47,7 @@ class ComparePanel(QWidget):
         g = QGroupBox("Danh sách hệ thống (file Excel .xlsx)")
         gl = QVBoxLayout(g)
         r1 = QHBoxLayout()
-        r1.addWidget(button("📂 Chọn File Excel...", "primary", self.pick_file, size="sm"))
+        r1.addWidget(button("📂 Chọn file Excel…", "primary", self.pick_file, size="sm"))
         self.lbl_file = ElidedLabel("Chưa chọn file – chọn file Excel danh sách đảng viên đã số hoá xuất từ hệ thống")
         self.lbl_file.setStyleSheet("color:#475569;")
         r1.addWidget(self.lbl_file, 1)
@@ -165,9 +165,9 @@ class ComparePanel(QWidget):
                                  tip="Đổi tên thư mục thành CCCD_HoVaTen theo danh sách (sửa cả số CCCD gõ nhầm)")
         self.btn_move = button("📦 Chuyển Về Đúng Chi Bộ", "warning", self.do_move, size="sm",
                                tip="Chuyển thư mục hồ sơ sang thư mục chi bộ ghi trong danh sách")
-        self.btn_create = button("➕ Tạo Thư Mục Còn Thiếu", "primary", self.do_create, size="sm",
+        self.btn_create = button("➕ Tạo thư mục còn thiếu", "primary", self.do_create, size="sm",
                                  tip="Tạo thư mục rỗng CCCD_HoVaTen cho người có trong danh sách nhưng chưa có thư mục")
-        self.btn_undo = button("↶ Hoàn Tác", "light", self.undo, size="sm")
+        self.btn_undo = button("↶ Hoàn tác", "light", self.undo, size="sm")
         self.btn_export = button("📥 XUẤT EXCEL ĐỐI CHIẾU", "success", self.export, size="lg")
         for w in (self.btn_rename, self.btn_move, self.btn_create, self.btn_undo):
             a.addWidget(w)
@@ -480,7 +480,7 @@ class ComparePanel(QWidget):
         self.btn_move.setEnabled(nm > 0)
         self.btn_move.setText(f"📦 Chuyển Về Đúng Chi Bộ ({nm})" if nm else "📦 Chuyển Về Đúng Chi Bộ")
         self.btn_create.setEnabled(nc > 0)
-        self.btn_create.setText(f"➕ Tạo Thư Mục Còn Thiếu ({nc})" if nc else "➕ Tạo Thư Mục Còn Thiếu")
+        self.btn_create.setText(f"➕ Tạo thư mục còn thiếu ({nc})" if nc else "➕ Tạo thư mục còn thiếu")
         self.btn_undo.setEnabled(bool(self.last_ops))
         self.btn_export.setEnabled(cmp is not None)
 

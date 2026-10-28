@@ -350,7 +350,7 @@ class SplitPanel(QWidget):
         self.cb_arrange = combo([("Tách lần lượt", "sequential"), ("📖 Thứ tự sổ gỡ ghim", "booklet")])
         self.cb_arrange.setToolTip("Thứ tự sổ gỡ ghim: sổ tháo ghim, scan 2 mặt từng tờ → sắp lại đúng trang 1, 2, 3…")
         form.addRow("Sắp xếp:", self.cb_arrange)
-        self.btn_auto = button("🔢 Tự Đọc Số Trang && Sắp Xếp", "indigo", self.auto_order, size="sm")
+        self.btn_auto = button("🔢 Tự đọc số trang && sắp xếp", "indigo", self.auto_order, size="sm")
         if pagenum.available():
             self.btn_auto.setToolTip("Đọc số trang in ở đầu/chân mỗi trang (OCR có sẵn của Windows) rồi tự chọn đúng\n"
                                      "cách xếp sổ: tờ nào scan trước, mặt nào trước, mặt sau có lộn ngược không…")
@@ -436,7 +436,7 @@ class SplitPanel(QWidget):
         split.addWidget(cfg_scroll)
 
         # ---- trang scan gốc
-        gs = QGroupBox("1. Trang Scan Gốc (kéo đường cắt màu đỏ để chỉnh)")
+        gs = QGroupBox("1. Trang scan gốc (kéo đường cắt màu đỏ để chỉnh)")
         gsl = QVBoxLayout(gs)
         self.view_src = PageView("Chưa chọn file", draggable=True)
         self.view_src.cutDragged.connect(self._cut_dragged)
@@ -455,7 +455,7 @@ class SplitPanel(QWidget):
         split.addWidget(gs)
 
         # ---- kết quả
-        gr = QGroupBox("2. Xem Trước Kết Quả (giống 100% file xuất)")
+        gr = QGroupBox("2. Xem trước kết quả (giống 100% file xuất)")
         grl = QVBoxLayout(gr)
         self.view_res = PageView("Kết quả sẽ hiện ở đây")
         grl.addWidget(self.view_res, 1)
@@ -484,7 +484,7 @@ class SplitPanel(QWidget):
         sl.addWidget(QLabel("Lưu file kết quả tại:"))
         self.ed_out = QLineEdit()
         sl.addWidget(self.ed_out, 1)
-        sl.addWidget(button("📁 Chọn Vị Trí...", "light", self.pick_out, size="sm"))
+        sl.addWidget(button("📁 Chọn vị trí…", "light", self.pick_out, size="sm"))
         sl.addSpacing(8)
         sl.addWidget(QLabel("Trang xuất:"))
         self.ed_pages = QLineEdit()
@@ -672,7 +672,7 @@ class SplitPanel(QWidget):
         self._reads = self._guess = None
         self.lbl_auto.hide()
         if self._ocr_thread is None:
-            self.btn_auto.setText("🔢 Tự Đọc Số Trang && Sắp Xếp")
+            self.btn_auto.setText("🔢 Tự đọc số trang && sắp xếp")
             self.btn_auto.setEnabled(pagenum.available())
 
     def _auto_msg(self, html: str, color: str = "#334155"):
@@ -726,7 +726,7 @@ class SplitPanel(QWidget):
 
     def _ocr_done(self, token: int, results, err: str):
         self._ocr_thread = None
-        self.btn_auto.setText("🔢 Tự Đọc Số Trang && Sắp Xếp")
+        self.btn_auto.setText("🔢 Tự đọc số trang && sắp xếp")
         self.btn_auto.setEnabled(True)
         if token != self._ocr_token or self.src_doc is None:
             return                                      # đã đổi file / mẫu trong lúc đọc

@@ -29,6 +29,7 @@ from .rules1361_panel import Rules1361Panel
 from .split_panel import SplitPanel
 from .rules_panel import RulesPanel
 from .sign_panel import SignPanel
+from .pipeline_panel import PipelinePanel
 from . import illustrations, styles
 from .persist import Persist
 from .styles import button
@@ -170,61 +171,59 @@ class MainWindow(QMainWindow):
         hl.addWidget(ver, 0, Qt.AlignVCenter)
         root.addWidget(head)
 
-        # ---- khung cấu hình & thư mục nguồn
-        cfg = QGroupBox("Cấu hình && Thư mục nguồn")
-        cl = QVBoxLayout(cfg)
+        # ---- thanh thư mục nguồn: MỘT hàng (chọn thư mục → quét); việc phụ gom vào menu “Công cụ”
+        self.cfg = QWidget()
+        cl = QHBoxLayout(self.cfg)
+        cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(8)
-        r1 = QHBoxLayout()
-        r1.addWidget(QLabel("Thư mục chứa file:"))
+        cl.addWidget(QLabel("Thư mục chứa file:"))
         self.path_edit = QLineEdit()
         self.path_edit.setPlaceholderText("Chọn hoặc dán đường dẫn thư mục chứa các file .pdf… (có thể kéo thả thư mục vào cửa sổ)")
+        self.path_edit.setClearButtonEnabled(True)           # nút ✕ nhỏ ngay trong ô thay cho nút “Clear” đỏ dễ bấm nhầm
         self.path_edit.returnPressed.connect(self.start_scan)
-        r1.addWidget(self.path_edit, 1)
-        r1.addWidget(_btn("📁 Chọn Thư Mục...", "primary", self.choose_folder, size="sm"))
-        self.btn_scan = _btn("🔍 Quét / Làm Mới", "success", self.start_scan, "Quét lại thư mục (F5)", "sm")
+        self.path_edit.textChanged.connect(self._path_typed)
+        cl.addWidget(self.path_edit, 1)
+        cl.addWidget(_btn("📁 Chọn thư mục…", "primary", self.choose_folder, size="sm"))
+        self.btn_scan = _btn("🔍 Quét / Làm mới", "success", self.start_scan, "Quét lại thư mục (F5)", "sm")
         self.btn_scan.setShortcut("F5")
-        r1.addWidget(self.btn_scan)
-        r1.addWidget(_btn("✖ Clear", "danger", self.clear_all, "Xóa đường dẫn thư mục đã chọn", "sm"))
-        cl.addLayout(r1)
-
-        r2 = QHBoxLayout()
-        self.chk_rec = QCheckBox("Quét tất cả thư mục con bên trong (Recursive Scan)")
-        self.chk_rec.setToolTip("Quét tất cả thư mục con bên trong (Recursive Scan)")
+        cl.addWidget(self.btn_scan)
+        cl.addSpacing(10)
+        self.chk_rec = QCheckBox("Quét thư mục con")
+        self.chk_rec.setToolTip("Quét tất cả thư mục con bên trong")
         self.chk_rec.setChecked(True)
-        r2.addWidget(self.chk_rec)
-        r2.addSpacing(24)
-        r2.addWidget(QLabel("Tính số trang:"))
+        cl.addWidget(self.chk_rec)
+        self.lbl_pages = QLabel("Tính số trang:")
+        cl.addWidget(self.lbl_pages)
         self.combo = QComboBox()
         self.combo.addItem("Tất cả file", FILTER_ALL)
         self.combo.addItem("Chỉ file .signed", FILTER_SIGNED)
         self.combo.addItem("Không tính file .signed", FILTER_UNSIGNED)
-        self.combo.setMinimumWidth(200)
+        self.combo.setMinimumWidth(170)
         self.combo.currentIndexChanged.connect(self.filter_changed)
-        r2.addWidget(self.combo)
-        r2.addStretch(1)
+        cl.addWidget(self.combo)
         self.lbl_root = QLabel("", self)        # giữ để tương thích – đường dẫn đã hiện ở ô thư mục
         self.lbl_root.hide()
-        self.lbl_tools = QLabel("Công cụ:")
-        r2.addWidget(self.lbl_tools)
-        self.tool_btns = []                     # (nút, chữ đầy đủ) – màn hình hẹp chỉ hiện biểu tượng
+        self.lbl_tools = QLabel("")             # (cũ) nhãn “Công cụ:” – nay gom vào menu
+        self.lbl_tools.hide()
+        self.tool_btns = []
+        more = _btn("🧰 Công cụ", "light", None, "Kiểm tra đủ 5 file, thư mục CCCD, copy nhóm file, nhật ký…", "sm")
+        m = QMenu(more)
         for text, slot, tip in (
                 ("📋 Kiểm tra đủ 5 file", self.open_check5, "Mỗi thư mục có PDF phải có đủ file 01. – 05."),
                 ("🪪 Thư mục CCCD", self.open_cccd, "Thư mục tên đúng 12 chữ số; xoá vào Thùng rác"),
                 ("📦 Copy nhóm file", self.open_copy, "Copy file .signed / không .signed ra thư mục mới, giữ cây thư mục")):
-            b = _btn(text, "light", slot, f"{text[2:]} – {tip}", "sm")
-            self.tool_btns.append((b, text))
-            r2.addWidget(b)
-        more = _btn("☰ Thêm", "light", None, "Mở thư mục nguồn, nhật ký, dữ liệu ứng dụng", "sm")
-        m = QMenu(more)
+            act = m.addAction(text, slot)
+            act.setToolTip(tip)
+            act.setStatusTip(tip)
+        m.addSeparator()
         m.addAction("📂 Mở thư mục nguồn", self.open_root)
         m.addAction("📜 Nhật ký thao tác", self.show_log)
         m.addAction("🗂 Dữ liệu ứng dụng (bộ quy tắc, lịch sử)", lambda: open_path(paths.data_dir()))
         m.addSeparator()
         m.addAction("↺ Khôi phục cài đặt gốc", self.reset_settings)
         more.setMenu(m)
-        r2.addWidget(more)
-        cl.addLayout(r2)
-        root.addWidget(cfg)
+        cl.addWidget(more)
+        root.addWidget(self.cfg)
 
         # ---- các tab
         self.tabs = QTabWidget()
@@ -265,13 +264,23 @@ class MainWindow(QMainWindow):
         self.sign.busy_check = self._busy_guard
         self.sign.busyChanged.connect(lambda b: self._update_busy())
         self.sign.changed.connect(self.rescan)
+        self.sign.sourcePicked.connect(lambda p: (self.path_edit.setText(p), self.start_scan()))
+        self.pipeline = PipelinePanel()
+        self.pipeline.busy_check = self._busy_guard
+        self.pipeline.rename_cfg = self.rename.pipeline_config
+        self.pipeline.busyChanged.connect(lambda b: self._update_busy())
+        self.pipeline.editRules.connect(lambda: self._show_tab(self.rename))
+        self.pipeline.openSign.connect(self._pipeline_to_sign)
         self.compare = ComparePanel(lambda: self.report.rep)
         self.compare.busy_check = self._busy_guard
         self.compare.changed.connect(self.rescan)
         # mỗi tab nằm trong khung cuộn: màn hình nhỏ thì cuộn được, không bị cắt mất phần dưới
-        for page, title in ((self.rename, "🏷 Đổi tên"), (self.split, "✂ Tách trang"), (self.check, "🧭 Kiểm tra trang"),
-                            (self.compress, "⚡ Giảm dung lượng"), (self.report, "📑 Báo cáo hồ sơ"), (self.sign, "✍ Gom ký số"),
-                            (self.compare, "🔗 Đối chiếu danh sách"), (self.rules_wrap, "⚙ Bộ quy tắc")):
+        # thứ tự theo trình tự làm việc: Quy trình (1 click) → từng bước lẻ (đổi tên → nén → ký số) → công cụ → báo cáo
+        for page, title in ((self.pipeline, "🚀 Quy trình"), (self.rename, "🏷 Đổi tên"),
+                            (self.compress, "⚡ Nén PDF"), (self.sign, "✍ Gom ký số"),
+                            (self.check, "🧭 Kiểm tra trang"), (self.split, "✂ Tách trang"),
+                            (self.report, "📑 Báo cáo"), (self.compare, "🔗 Đối chiếu"),
+                            (self.rules_wrap, "⚙ Quy tắc")):
             self.tabs.addTab(_scrollable(page), title)
         guide = QTextBrowser()
         guide.setOpenExternalLinks(True)
@@ -287,6 +296,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(gw, "📖 Hướng dẫn")
         root.addWidget(self.tabs, 1)
         self.tabs.currentChanged.connect(self._flush_pending)
+        self.tabs.currentChanged.connect(self._tab_changed)
 
         # ---- tiến trình + nhật ký
         bar = QHBoxLayout()
@@ -325,8 +335,9 @@ class MainWindow(QMainWindow):
         p.bind("check", self.check, ["ck_rot", "ck_sort", "ck_blank", "ck_signed", "rb_new", "rb_over", "ck_backup"])
         p.bind("compress", self.compress, ["sp", "ck_clean", "ck_signed", "rb_new", "rb_over", "ck_backup"])
         p.bind("report", self.report, ["ed_req", "cb_sign", "ck_adv"])
-        p.bind("sign", self.sign, ["ck_hide", "rb_back", "rb_copy", "ck_full", "cb_batch", "sp_batch", "ck_verify",
-                                   "ck_watch", "ck_issue"])
+        p.bind("pipeline", self.pipeline, ["sp", "ck_clean", "cb_batch", "sp_batch"])
+        p.bind("sign", self.sign, ["rb_back", "rb_copy", "ck_full", "cb_batch", "sp_batch", "ck_verify",
+                                   "ck_watch"])                 # bộ lọc "chỉ dòng cần xử lý" KHÔNG nhớ (dễ che hết bảng)
         # cài đặt cũ (trước v1.8)
         if not self.settings.contains("ui/main/chk_rec") and self.settings.value("recursive") == "false":
             self.chk_rec.setChecked(False)
@@ -400,15 +411,12 @@ class MainWindow(QMainWindow):
         self._apply_compact(self.width() < 1500)
 
     def _apply_compact(self, compact: bool):
-        """Màn hình hẹp (laptop 1366 px, phóng to 125%): rút gọn chữ trên thanh cấu hình để không tràn."""
+        """Màn hình hẹp (laptop 1366 px, phóng to 125%): rút gọn chữ trên thanh thư mục để không tràn."""
         if getattr(self, "_compact", None) == compact:
             return
         self._compact = compact
         self.sub_title.setVisible(not compact)
-        self.lbl_tools.setVisible(not compact)
-        self.chk_rec.setText("Quét thư mục con" if compact else "Quét tất cả thư mục con bên trong (Recursive Scan)")
-        for b, text in self.tool_btns:
-            b.setText(text.split(" ", 1)[0] if compact else text)
+        self.lbl_pages.setVisible(not compact)
 
     def _build_overview(self) -> QWidget:
         # Bố cục kiểu Hồ sơ 1361: bên trái (thẻ + cây), bên phải cột xem trước hẹp, cao hết chiều dọc tab
@@ -478,7 +486,7 @@ class MainWindow(QMainWindow):
         tl.setContentsMargins(6, 6, 6, 6)
         tl.addWidget(self.tree)
         lay.addWidget(treebox, 1)
-        box = QGroupBox("Xem Trước File PDF")
+        box = QGroupBox("Xem trước file PDF")
         bl = QVBoxLayout(box)
         bl.setContentsMargins(8, 8, 8, 8)
         self.preview = PreviewPane(title="")
@@ -495,7 +503,18 @@ class MainWindow(QMainWindow):
     # ================================================================= tiện ích chung
     @property
     def busy(self) -> bool:
-        return self.scanning or self.compress.running or self.check.running or self.sign.running
+        return (self.scanning or self.compress.running or self.check.running or self.sign.running
+                or self.pipeline.running)
+
+    def _pipeline_to_sign(self, gather: str, work: str):
+        """Quy trình xong → sang tab Gom ký số: thư mục gom + thư mục chép ra (bản làm việc - Đã ký) đã điền sẵn."""
+        s = self.sign
+        s._dir_auto = s._out_auto = False
+        s.ed_dir.setText(gather)
+        s.ed_out.setText(work.rstrip("\\/") + " - Đã ký")
+        s.rb_copy.setChecked(True)
+        self._show_tab(s)
+        s._dir_chosen()
 
     def _update_busy(self):
         self.btn_scan.setEnabled(not self.busy)
@@ -553,6 +572,17 @@ class MainWindow(QMainWindow):
         p = self.result.root if self.result else self.path_edit.text().strip()
         if p and os.path.isdir(p):
             open_path(p)
+
+    def _path_typed(self, text: str):
+        """Xoá ô thư mục (nút ✕ trong ô) → làm sạch luôn danh sách đã quét, như nút “Clear” cũ."""
+        if not text.strip() and self.result is not None and not self.busy:
+            self.clear_all()
+
+    def _tab_changed(self, *_):
+        """Tab Hướng dẫn / Bộ quy tắc không dùng thư mục nguồn → ẩn thanh thư mục cho thoáng."""
+        w = self.tabs.currentWidget()
+        inner = w.widget() if isinstance(w, QScrollArea) else w
+        self.cfg.setVisible(inner not in (self.rules_wrap, self.guide.parentWidget()))
 
     def clear_all(self):
         if self.busy:
@@ -625,6 +655,7 @@ class MainWindow(QMainWindow):
         self._update_scope_bar()
         self._update_cards()
         self._push_files()
+        self.pipeline.set_source(res.root, res.files)
         self.report.set_result(res)
         self.compare.refresh()
         self.lbl_root.setText(f"📁 {res.root}")
@@ -925,8 +956,9 @@ class MainWindow(QMainWindow):
                    ["Thời gian", "Thao tác", "Chi tiết"], rows, widths=[160, 200, 560]).exec()
 
     def closeEvent(self, e):
-        if self.compress.running or self.check.running or self.sign.running:
-            QMessageBox.information(self, "Đang xử lý", "Đang nén / kiểm tra PDF – hãy bấm Dừng và chờ xong trước khi thoát.")
+        if self.compress.running or self.check.running or self.sign.running or self.pipeline.running:
+            QMessageBox.information(self, "Đang xử lý", "Đang chạy quy trình / nén / kiểm tra PDF – hãy bấm Dừng và chờ xong "
+                                                         "trước khi thoát.")
             e.ignore()
             return
         if self.thread and self.thread.isRunning():

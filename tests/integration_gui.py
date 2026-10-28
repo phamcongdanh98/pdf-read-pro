@@ -419,9 +419,9 @@ def _main():
     gp.check_return()                                             # chạy ở luồng phụ → chờ xong
     assert pump(app, lambda: not gp.running, 30), "kiểm tra trả về timeout"
     assert not gp.btn_return.isEnabled() and "không có chữ ký thật" in gp.lbl.text(), gp.lbl.text()
-    gp.ck_issue.setChecked(True)
+    gp.cb_show.setCurrentIndex(gp.cb_show.findData("issue"))
     assert gp.view_rows() == 1, gp.view_rows()                    # lọc "chỉ dòng cần xử lý"
-    gp.ck_issue.setChecked(False)
+    gp.cb_show.setCurrentIndex(0)
     os.remove(os.path.join(gdir, gathered[0][:-4] + ".signed.pdf"))
     sign_pdf(os.path.join(gdir, gathered[0]), os.path.join(gdir, gathered[0][:-4] + ".signed.pdf"), "TRAN VAN THAI")
     assert pump(app, lambda: not gp.running and gp.btn_return.isEnabled(), 30), gp.lbl.text()   # tự cập nhật
@@ -462,14 +462,14 @@ def _main():
     assert gp2.journal is not None and gp2.journal_kind == "copy" and gp2.btn_undo.isEnabled()
     gp2.deleteLater()
     # tách file cần ký lại: người chưa ký → "Ký lại …"
-    assert pump(app, lambda: not gp.running and gp.btn_regroup.isEnabled(), 30), gp.lbl.text()
+    assert pump(app, lambda: not gp.running and gp.act_regroup.isEnabled(), 30), gp.lbl.text()
     gp.do_regroup()
     assert pump(app, lambda: not gp.running and gp.journal_kind == "regroup", 30), "tách file timeout"
     redo = [d for d in os.listdir(gdir) if d.startswith(SG.REDO_DIR)]
     assert redo and os.listdir(os.path.join(gdir, redo[0])) == [gathered[1]], redo
     # xuất Excel
     QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (os.path.join(work, "gom_test", "kq.xlsx"), ""))
-    assert pump(app, lambda: not gp.running and gp.btn_excel.isEnabled(), 30)
+    assert pump(app, lambda: not gp.running and gp.act_excel.isEnabled(), 30)
     gp.export_excel()
     assert pump(app, lambda: os.path.isfile(os.path.join(work, "gom_test", "kq.xlsx")), 30), "xuất Excel"
     gp.undo()                                                     # hoàn tác tách → file về chỗ cũ

@@ -5,12 +5,12 @@ Chạy ngay: `dist\PDFReadPro.exe` (1 file, không cần cài, không cần quy�
 
 ## Bố cục (v1.8 – phong cách Hồ sơ 1361, gọn hơn)
 ```
-PDF-READ PRO  (banner 1 dòng)                                            [🌙 Tối]  v1.8.0
+PDF-READ PRO  (banner 1 dòng)                                            [🌙 Tối]  v1.9.0
 ┌ Cấu hình & Thư mục nguồn ──────────────────────────────────────────────────────────────┐
 │ Thư mục: [...............................................] [Chọn thư mục] [Quét] [Clear]│
 │ ☑ Quét thư mục con  Tính số trang: [Tất cả ▾]   Công cụ: [Đủ 5 file][CCCD][Copy][☰ Thêm]│
 └────────────────────────────────────────────────────────────────────────────────────────┘
-[Tổng quan][Đổi tên][Tách trang][Kiểm tra trang][Giảm dung lượng][Báo cáo hồ sơ][Gom ký số][Đối chiếu][Bộ quy tắc][Hướng dẫn]
+[Tổng quan][Quy trình][Đổi tên][Nén PDF][Gom ký số][Kiểm tra trang][Tách trang][Báo cáo][Đối chiếu][Quy tắc][Hướng dẫn]
   …nội dung tab… (màn hình nhỏ: mỗi tab tự có thanh cuộn, thanh công cụ thu gọn còn biểu tượng)
 Trạng thái + thanh tiến trình                                                 [📜 Nhật ký]
 ```
@@ -74,13 +74,35 @@ Trạng thái + thanh tiến trình                                             
 9. **Công cụ** cạnh ô thư mục: kiểm tra đủ 5 file `01.`–`05.`, thư mục CCCD 12 số (xoá vào Thùng rác), copy nhóm file giữ cây thư mục;
    **☰ Thêm**: mở thư mục nguồn, nhật ký, dữ liệu ứng dụng.
 
-**Tab Gom ký số** (v1.8) – ký số hàng loạt cho nhiều hồ sơ `CCCD_HoVaTen`:
+**Tab Quy trình – 1 click** (v1.9): **Đổi tên → Giảm dung lượng (mặc định 250 KB/trang) → Gom file chưa ký để ký số**,
+chạy tuần tự đến khi có kết quả. Quét hồ sơ rồi bấm **🚀 CHẠY CẢ QUY TRÌNH**:
+
+| Bước | Việc | Chống lỗi |
+|---|---|---|
+| Kiểm tra trước | Không ghi gì: đếm file sẽ đổi tên / nén / gom, cảnh báo, kiểm tra dung lượng ổ → hộp thoại xác nhận | Thư mục làm việc / gom phải **mới**, tách rời hồ sơ gốc; ổ không đủ chỗ → không chạy |
+| ⓪ Chép | Chép cả cây hồ sơ sang `<thư mục> - Quy trình` (bản làm việc) | **Hồ sơ gốc không bao giờ bị ghi** (mọi lệnh ghi qua `_guard`); chép qua `.part`, đối chiếu kích thước |
+| ① Đổi tên | Theo quy tắc **đang chọn ở tab Đổi tên** (1361 hoặc mẫu tuỳ chỉnh), chỉ trên bản chép | Không ghi đè; file chưa có quy tắc giữ tên cũ + cảnh báo |
+| ② Nén | ≤ N KB/trang, bỏ qua file đã ký số (nén sẽ hỏng chữ ký) | Mở lại từng file đã nén: lệch số trang / hỏng → **tự khôi phục từ hồ sơ gốc** |
+| ③ Gom | Chép file chưa ký vào `<bản làm việc> - Gom ký số` (chia lô tuỳ chọn), ghi sổ | Đối chiếu kích thước; thư mục ngoài `CCCD_HoVaTen` / trùng tên hồ sơ không gom + báo |
+
+Bước nào lỗi → các bước sau **không chạy**, bản chép giữ nguyên để xem; **■ Dừng** được bất cứ lúc nào (hồ sơ gốc vẫn nguyên).
+Kết quả từng file (tên mới, dung lượng trước → sau, trạng thái gom) có ô tìm kiếm + lọc *Chỉ file cần xem*, **📊 Xuất Excel**,
+**➡ Sang tab Gom ký số** (điền sẵn thư mục gom; ký xong chép ra `<bản làm việc> - Đã ký` đúng cây Chi bộ\CCCD_HoVaTen),
+**🗑 Xoá kết quả (làm lại)** (vào Thùng rác, chỉ thư mục do quy trình tạo). Chạy lần 2 tự đặt tên `(2)`, không ghi chồng kết quả cũ.
+Thử trên dữ liệu thật: 446 file 997 MB → 407 MB trong 71 giây; 2.621 file (đổi tên 120 file, gom 2.621) trong 14 giây.
+Test: `tests\test_pipeline.py` (11 test), `tests\gui_pipeline.py` (giao diện), selftest exe có chạy trọn quy trình.
+
+**Tab Gom ký số** (v1.8; giao diện làm gọn ở v1.9) – ký số hàng loạt cho nhiều hồ sơ `CCCD_HoVaTen`.
+Giao diện **2 bước**: 2 thẻ *① Gom để ký* / *② Trả về sau ký* ở đầu tab, mỗi bước chỉ hiện thiết lập + nút của nó; tuỳ chọn
+ít dùng gập trong *▸ Tuỳ chọn nâng cao*; nút **chính** (to, màu) ở góc phải dưới, việc phụ (mở thư mục, tách file, xuất Excel)
+trong menu *⋯ Thêm*; dòng chữ dưới trái luôn nói bước tiếp theo; dòng tóm tắt màu ✔ ⏳ ⚠; ô *Hiện* lọc Tất cả / Việc sẽ làm /
+Cần xử lý. Bảng 4 cột (Hồ sơ · Tên file · Trạng thái có biểu tượng · Ghi chú / nơi đến).
 1. **① Gom để ký**: CHÉP file **chưa ký** (bỏ file `.signed` và file đã có bản `.signed` cạnh nó) vào 1 thư mục
    (mặc định `<thư mục quét> - Gom ký số`), tên thêm đuôi hồ sơ:
    `056123456789_TranVanThai\01.Ly_lich_nguoi_xin_vao_Dang.pdf` → `01.Ly_lich_nguoi_xin_vao_Dang_056123456789_TranVanThai.pdf`.
    File gốc giữ nguyên; sổ `_gom_ky_so.json` trong thư mục gom ghi file nào của hồ sơ nào.
 2. Ký số hàng loạt bằng phần mềm ký (tạo thêm `….signed.pdf`, không ghi đè).
-3. **② Trả về sau ký** (bấm *Kiểm tra trả về* để xem trước): bản `.signed` được CHUYỂN về đúng hồ sơ, bỏ đuôi
+3. **② Trả về sau ký** (chọn thẻ ②: bảng xem trước hiện ngay, *🔄 Kiểm tra lại* khi cần): bản `.signed` được CHUYỂN về đúng hồ sơ, bỏ đuôi
    (`01.Ly_lich_nguoi_xin_vao_Dang.signed.pdf`); bản chưa ký giống hệt bản gốc → xoá bản sao; file chưa ký xong giữ
    lại để ký tiếp. Không ghi đè: hồ sơ đã có file cùng tên khác nội dung → báo *xung đột*, giữ lại. Mất sổ ghi
    (chép thư mục gom sang máy khác) vẫn nhận hồ sơ theo đuôi `_CCCD_HoVaTen`. Có **↶ Hoàn tác**.
@@ -104,6 +126,9 @@ Kiểm tra trả về và hoàn tác chạy ở luồng phụ (5.242 file: 13 s 
 | 2 chi bộ có **thư mục hồ sơ trùng tên** | không gom, báo đường dẫn trùng |
 | Đường dẫn > 250 ký tự | cảnh báo; app vẫn chép / chuyển được (đường dẫn `\\?\`) |
 | Ổ đích **không đủ chỗ** | báo trước, chưa chép file nào |
+| Còn **hồ sơ chưa ký / bản ký lỗi** lúc bấm chép / trả về | hộp xác nhận ghi số hồ sơ + dung lượng và cảnh báo (mặc định “Không”) |
+| Sau khi chép | **đối chiếu** từng file đích (có mặt + đúng dung lượng), tóm tắt “đủ N/M, không lỗi”; nút **⏹ Dừng** giữa chừng |
+| Thư mục mới đã có file | tự đặt tên khác (thêm (2), (3)…), không còn tình trạng “không còn gì để chép” |
 
 Chép qua file `.part` rồi mới đổi tên (mất điện không để lại file dở). Nhật ký hoàn tác lưu ra file
 (`%APPDATA%\PDFReadPro\gom_ky_so_hoan_tac.json`, ghi mỗi 100 file) → tắt app / lỗi giữa chừng vẫn hoàn tác được.
@@ -155,7 +180,7 @@ khác **bản zip portable hoặc bộ cài** thay vì exe 1 file. Còn báo nh�
 từng hãng – Microsoft: https://www.microsoft.com/wdsi/filesubmission. Triệt để nhất là ký số exe (chứng thư
 code signing, có phí).
 
-Bộ cài (cần Inno Setup 6): `py build.py --dir` rồi `ISCC.exe installer.iss` → `dist\Setup_PDFReadPro_1.8.0.exe`.
+Bộ cài (cần Inno Setup 6): `py build.py --dir` rồi `ISCC.exe installer.iss` → `dist\Setup_PDFReadPro_1.9.0.exe`.
 Bản build lọc bỏ thư viện / plugin Qt app không dùng (xem `build.py`): exe 1 file ~59 MB, mở ~1,8 giây;
 bản thư mục mở ~0,9 giây.
 
@@ -179,5 +204,10 @@ flowchart LR
       compare --> compare_excel[compare_excel: xuất đối chiếu]
       signgather[signgather: gom file để ký số / kiểm tra bản ký / trả về hồ sơ] --> scanner
       signgather --> signgather_excel[signgather_excel: xuất kết quả]
+      pipeline[pipeline: quy trình 1 click chép → đổi tên → nén → gom] --> renamer
+      pipeline --> compressor
+      pipeline --> signgather
+      pipeline --> scanner
+      pipeline --> pipeline_excel[pipeline_excel: xuất kết quả]
     end
 ```

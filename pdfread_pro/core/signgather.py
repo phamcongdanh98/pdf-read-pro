@@ -137,6 +137,11 @@ def _exists(p: str) -> bool:
 
 def _same(a: str, b: str) -> bool:
     try:
+        sa, sb = os.stat(_lp(a)), os.stat(_lp(b))
+        if sa.st_size != sb.st_size:
+            return False
+        if abs(sa.st_mtime - sb.st_mtime) < 2:           # bản chép (copy2) giữ nguyên ngày sửa → khỏi đọc lại từng byte
+            return True
         return filecmp.cmp(_lp(a), _lp(b), shallow=False)
     except OSError:
         return False
@@ -383,12 +388,15 @@ def _save_manifest(gather_dir: str, data: dict) -> None:
 
 def gather(items: List[GatherItem], gather_dir: str, progress: Optional[Callable[[int, int], None]] = None,
            cancel: Optional[Callable[[], bool]] = None,
-           checkpoint: Optional[Callable[[Journal], None]] = None) -> Journal:
-    """Chép các file 'Sẽ gom' vào thư mục gom (không ghi đè) và ghi sổ để trả về."""
+           checkpoint: Optional[Callable[[Journal], None]] = None, root: str = "") -> Journal:
+    """Chép các file 'Sẽ gom' vào thư mục gom (không ghi đè) và ghi sổ để trả về.
+    root: thư mục hồ sơ gốc lúc gom – ghi vào sổ để chép ra thư mục mới giữ đúng cây thư mục (kể cả khi chỉ có 1 chi bộ)."""
     todo = [it for it in items if it.status == G_NEW]
     check_space((it.src, os.path.join(gather_dir, it.rel)) for it in todo)
     os.makedirs(_lp(gather_dir), exist_ok=True)
     data = _load_manifest(gather_dir)
+    if root:
+        data["root"] = os.path.abspath(root)
     j = Journal(kind="gather", info=gather_dir, time=datetime.now().isoformat(timespec="seconds"))
     try:
         for i, it in enumerate(todo, 1):
@@ -427,9 +435,48 @@ def _find_dossier(folder: str, roots: List[str], index: Dict[str, str]) -> str:
     return index.get(folder.lower(), "")
 
 
+def looks_like_gather(gather_dir: str) -> bool:
+    """Thư mục này đã được gom rồi? (có sổ ghi, hoặc có PDF tên đuôi _CCCD_HoVaTen) → tab hiện luôn bảng ② Trả về."""
+    if not gather_dir or not os.path.isdir(_lp(gather_dir)):
+        return False
+    if os.path.isfile(_lp(os.path.join(gather_dir, MANIFEST))):
+        return True
+    for p in _walk_pdfs(gather_dir)[:50]:
+        m = _ANY_TAIL.search(os.path.basename(p)[:-4])
+        if _TAIL.search(os.path.basename(p)[:-4][:m.start()] if m else os.path.basename(p)[:-4]):
+            return True
+    return False
+
+
+def count_dossiers(folder: str, depth: int = 3) -> int:
+    """Số thư mục hồ sơ CCCD_HoVaTen trong cây (tối đa `depth` cấp) – nhận ra thư mục HỒ SƠ / chi bộ."""
+    n, level = 0, [folder]
+    for _ in range(depth):
+        nxt = []
+        for d in level:
+            try:
+                for e in os.scandir(_lp(d)):
+                    if e.is_dir(follow_symlinks=False):
+                        if DOSSIER.match(e.name):
+                            n += 1
+                        else:
+                            nxt.append(os.path.join(d, e.name))
+            except OSError:
+                continue
+        if n:
+            break
+        level = nxt[:200]
+    return n
+
+
 def guess_root(gather_dir: str) -> str:
-    """Thư mục hồ sơ gốc suy từ sổ ghi (thư mục chung chứa các thư mục hồ sơ) – dùng được cả khi CHƯA quét."""
-    parents = {os.path.dirname(os.path.abspath(r["dir"])) for r in _load_manifest(gather_dir)["items"].values()
+    """Thư mục hồ sơ gốc theo sổ ghi (thư mục gốc lúc gom; sổ cũ thì suy ra thư mục chung chứa các thư mục hồ sơ) –
+    dùng được cả khi CHƯA quét."""
+    man = _load_manifest(gather_dir)
+    root = man.get("root")
+    if isinstance(root, str) and root and os.path.isdir(_lp(root)):
+        return root
+    parents = {os.path.dirname(os.path.abspath(r["dir"])) for r in man["items"].values()
                if isinstance(r, dict) and isinstance(r.get("dir"), str) and r["dir"]}
     if not parents:
         return ""
@@ -641,6 +688,33 @@ def do_return(items: List[ReturnItem], progress: Optional[Callable[[int, int], N
         e.partial_journal = j
         raise
     return j
+
+
+def verify_copy(items: List[ReturnItem]) -> Tuple[int, List[str]]:
+    """Đối chiếu sau khi chép: mỗi file đích phải có mặt và đúng dung lượng bản nguồn. Trả (số đúng, danh sách lỗi)."""
+    ok, bad = 0, []
+    for it in items:
+        try:
+            good = os.path.getsize(_lp(it.dest)) == os.path.getsize(_lp(it.path))
+        except OSError:
+            good = False
+        if good:
+            ok += 1
+        else:
+            bad.append(it.dest)
+    return ok, bad
+
+
+def describe(items: List[ReturnItem]) -> Tuple[int, int]:
+    """(số hồ sơ, tổng dung lượng byte) của các file sẽ chép / trả về – để hiện trong hộp xác nhận."""
+    folders, size = set(), 0
+    for it in items:
+        folders.add(it.folder)
+        try:
+            size += os.path.getsize(_lp(it.path))
+        except OSError:
+            pass
+    return len(folders), size
 
 
 # ------------------------------------------------------------------ tách file cần ký lại / bản ký lỗi

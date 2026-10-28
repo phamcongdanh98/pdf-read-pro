@@ -2,7 +2,6 @@
 giao dịch theo từng thư mục có nhật ký chống mất điện, hoàn tác, lưu bộ quy tắc."""
 from __future__ import annotations
 
-import copy
 import json
 import os
 import re
@@ -12,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .models import FileInfo, name_is_signed
+from .models import FileInfo
 
 # ---------------------------------------------------------------- tiện ích chuỗi
 
@@ -116,8 +115,10 @@ def load_presets() -> List[dict]:
 def save_user_presets(presets: List[dict]) -> None:
     builtin = {p["name"] for p in default_presets()}
     user = [p for p in presets if p["name"] not in builtin]
-    with open(_presets_path(), "w", encoding="utf-8") as fh:
+    tmp = _presets_path() + ".tmp"                      # ghi qua file tạm: mất điện / lỗi giữa chừng không làm hỏng bộ đã lưu
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(user, fh, ensure_ascii=False, indent=2)
+    os.replace(tmp, _presets_path())
 
 
 def step_summary(s: dict) -> str:
@@ -576,8 +577,9 @@ def _rename_ops(ops: List[Tuple[str, str]], journal: dict, report: ApplyReport) 
 
 
 def apply_renames(items: List[PreviewItem], progress: Optional[Callable[[int, int], None]] = None,
-                  cancel=None) -> ApplyReport:
-    """Đổi tên các mục `will_rename`. Mỗi thư mục là một giao dịch độc lập."""
+                  cancel=None, record_history: bool = True) -> ApplyReport:
+    """Đổi tên các mục `will_rename`. Mỗi thư mục là một giao dịch độc lập.
+    record_history=False: không ghi vào lịch sử hoàn tác (đổi tên trên bản chép của quy trình 1 click)."""
     todo = [it for it in items if it.will_rename]
     report = ApplyReport(batch_id=uuid.uuid4().hex[:12])
     by_dir: Dict[str, List[PreviewItem]] = {}
@@ -601,7 +603,7 @@ def apply_renames(items: List[PreviewItem], progress: Optional[Callable[[int, in
         os.remove(_journal_path())
     except OSError:
         pass
-    if all_done:
+    if all_done and record_history:
         hist = _read_json(_history_path(), [])
         hist.append({"id": report.batch_id, "time": journal["time"], "ops": [list(x) for x in all_done],
                      "undone": False})

@@ -2,17 +2,16 @@
 from __future__ import annotations
 
 import os
-from typing import List, Optional
+from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QFileDialog,
-                               QHBoxLayout, QHeaderView, QLabel, QMessageBox, QProgressDialog, QPushButton,
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QHBoxLayout, QHeaderView, QLabel, QMessageBox, QProgressDialog, QPushButton,
                                QTableWidget, QTableWidgetItem, QVBoxLayout)
 
 from ..core import activity, tools as T
 from ..core.models import FILTER_ALL, FILTER_SIGNED, FILTER_UNSIGNED, ScanResult
-from .common import fmt, fmt_size, open_path, reveal
+from .common import fmt, fmt_size, open_path
 
 
 def _table(cols, widths) -> QTableWidget:

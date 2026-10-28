@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFileDialog, QGroup
 from ..core import activity, compressor as C
 from ..core.models import FileInfo
 from .common import fmt, fmt_size
-from .preview import PreviewPane
+from .preview import PreviewPane, make_collapsible
 
 DEFAULT_LIMIT_KB = 250     # mặc định 250 KB/trang (chữ scan 300 dpi vẫn rõ – xem README)
 
@@ -148,7 +148,7 @@ class CompressPanel(QWidget):
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Interactive)
         hh.setStretchLastSection(True)
-        for i, w in enumerate((44, 300, 150, 52, 130, 80, 160, 220)):
+        for i, w in enumerate((44, 280, 130, 56, 140, 100, 110, 220)):
             self.table.setColumnWidth(i, w)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.itemSelectionChanged.connect(self.show_selected)
@@ -156,7 +156,7 @@ class CompressPanel(QWidget):
         lay.addWidget(self.table, 1)
 
         # ---- xem trước: bản gốc ↔ bản đã nén (so độ rõ của chữ trước / sau khi nén)
-        pbox = QGroupBox("Xem Trước File PDF")
+        pbox = QGroupBox("Xem trước file PDF")
         pl = QVBoxLayout(pbox)
         pl.setContentsMargins(8, 8, 8, 8)
         sw = QHBoxLayout()
@@ -209,8 +209,8 @@ class CompressPanel(QWidget):
         split.addWidget(pbox)
         split.setStretchFactor(0, 66)
         split.setStretchFactor(1, 34)
-        split.setSizes([900, 480])
-        split.setChildrenCollapsible(False)
+        btn_prev = make_collapsible(split, self.preview)
+        bot.insertWidget(2, btn_prev)           # cạnh thanh tiến trình, trước các nút chính
         self.mode_changed()
         self._enable_actions()
 

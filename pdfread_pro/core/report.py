@@ -15,7 +15,7 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 from .models import FileInfo, ScanResult
 from .renamer import _SIGNED_TAIL, match_rule_code, natural_key, remove_accents
@@ -335,7 +335,6 @@ def build_report(result: ScanResult, rules: Dict[str, str],
         rep.notes.append("Đang tắt “Quét thư mục con” – hãy bật để lập báo cáo đầy đủ.")
 
     # mức của thư mục: chi bộ / hồ sơ theo chế độ
-    shift = {"root": 0, "chibo": 1, "dossier": 2}[mode]
     root_name = os.path.basename(root.rstrip("\\/"))
     parent_name = os.path.basename(os.path.dirname(root.rstrip("\\/")))
 

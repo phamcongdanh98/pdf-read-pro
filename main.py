@@ -103,6 +103,21 @@ def selftest(out_path: str) -> int:
         cm = CP.compare(tb, CP.guess_columns(tb.headers), rep)
         lines.append(f"đối chiếu danh sách: khớp {cm.count(CP.K_MATCH)} · chưa có thư mục {cm.count(CP.K_NO_FOLDER)}")
         ok &= cm.count(CP.K_MATCH) == 1 and cm.count(CP.K_NO_FOLDER) == 1
+        from pdfread_pro.core import pipeline as PL, signgather as SG
+        qs = os.path.join(work, "Quy trinh nguon", "Chi bo 1", "056123456789_PhamVanA")
+        os.makedirs(qs)
+        qpdf = os.path.join(qs, "1.scan.pdf")
+        ims[0].save(qpdf, save_all=True, append_images=ims[1:], quality=95)      # nặng → phải nén; tên '1.' → đổi tên
+        qsrc = os.path.dirname(os.path.dirname(qs))
+        qsize = os.path.getsize(qpdf)
+        qcfg = PL.Config(qsrc, os.path.join(work, "Quy trinh lam viec"), os.path.join(work, "Quy trinh gom"),
+                         limit_kb=200, rules=rules, rule_label="1361")
+        qrep = PL.run(qcfg)
+        qw = os.path.join(qcfg.work, "Chi bo 1", "056123456789_PhamVanA", "01.Ly_lich_nguoi_xin_vao_Dang.pdf")
+        lines.append(f"quy trình 1 click: ok={qrep.ok} · {[s.status for s in qrep.stages]} · gom {qrep.gathered} · "
+                     f"giảm {qrep.saved_bytes // 1024} KB")
+        ok &= (qrep.ok and os.path.isfile(qw) and os.path.getsize(qw) < qsize and qrep.gathered == 1
+               and os.path.getsize(qpdf) == qsize and os.path.isfile(os.path.join(qcfg.gather, SG.MANIFEST)))
         shutil.rmtree(work, ignore_errors=True)
     except Exception:
         ok = False

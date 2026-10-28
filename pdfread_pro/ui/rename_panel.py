@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComb
 from ..core import activity, renamer as R
 from ..core.models import FileInfo
 from .common import ListDialog, fmt
-from .preview import PreviewPane
+from .preview import PreviewPane, make_collapsible
 from .rules1361_panel import Rules1361Panel
 from .rules_panel import RulesPanel
 from .styles import button
@@ -76,7 +76,7 @@ class RenamePanel(QWidget):
         self.ck_suffix.toggled.connect(lambda: self._timer.start())
         gl.addWidget(self.ck_suffix)
         gl.addStretch(1)
-        gl.addWidget(button("🔄 Làm Mới Preview", "primary", self.refresh, "Tính lại tên mới", "sm"))
+        gl.addWidget(button("🔄 Làm mới xem trước", "primary", self.refresh, "Tính lại tên mới", "sm"))
         root.addWidget(g)
 
         r = QHBoxLayout()
@@ -97,7 +97,7 @@ class RenamePanel(QWidget):
         r.addWidget(self.lbl_scope)
         root.addLayout(r)
 
-        left = QGroupBox("Danh sách xem trước kết quả Đổi tên (Live Preview)")
+        left = QGroupBox("Xem trước kết quả đổi tên")
         ll = QVBoxLayout(left)
         ll.setContentsMargins(6, 6, 6, 6)
         self.table = QTableWidget(0, len(COLS))
@@ -118,7 +118,7 @@ class RenamePanel(QWidget):
         ll.addWidget(self.table)
         root.addWidget(left, 1)
         split.addWidget(leftw)
-        rightg = QGroupBox("Xem Trước File PDF")
+        rightg = QGroupBox("Xem trước file PDF")
         rl = QVBoxLayout(rightg)
         rl.setContentsMargins(8, 8, 8, 8)
         self.preview = PreviewPane(title="")
@@ -126,19 +126,19 @@ class RenamePanel(QWidget):
         split.addWidget(rightg)
         split.setStretchFactor(0, 72)
         split.setStretchFactor(1, 28)
-        split.setSizes([1040, 400])
-        split.setChildrenCollapsible(False)
         rightg.setMinimumWidth(300)
+        btn_prev = make_collapsible(split, self.preview)
 
         bot = QHBoxLayout()
         self.lbl_sum = QLabel("Tổng số: 0 file | Đã khớp: 0 | Chưa có quy tắc: 0")
         self.lbl_sum.setObjectName("StatusText")
         bot.addWidget(self.lbl_sum, 1)
+        bot.addWidget(btn_prev)
         bot.addWidget(button("☑ Chọn tất cả", "light", lambda: self.set_all(True), size="sm"))
         bot.addWidget(button("☐ Bỏ chọn", "light", lambda: self.set_all(False), size="sm"))
         bot.addSpacing(10)
         self.btn_apply = button("🚀 BẮT ĐẦU ĐỔI TÊN HÀNG LOẠT", "success", self.apply, size="lg")
-        self.btn_undo = button("↩️ HOÀN TÁC (UNDO)", "warning", self.undo, size="lg")
+        self.btn_undo = button("↩️ HOÀN TÁC", "warning", self.undo, size="lg")
         bot.addWidget(self.btn_apply)
         bot.addWidget(self.btn_undo)
         outer.addLayout(bot)
@@ -344,6 +344,17 @@ class RenamePanel(QWidget):
     def _rule_name(self) -> str:
         return "bộ quy tắc mã số 1361" if self.mode == MODE_1361 else f"mẫu “{self.custom.ruleset.get('name')}”"
 
+    def pipeline_config(self) -> dict:
+        """Quy tắc đổi tên đang chọn ở tab này – dùng cho tab Quy trình 1 click (luôn lấy giá trị hiện tại)."""
+        import copy
+        if self.mode == MODE_1361:
+            return {"mode": "1361", "rules": dict(self.r1361.rules), "always_suffix": self.ck_suffix.isChecked(),
+                    "ruleset": {}, "policy": "auto",
+                    "label": "Bộ quy tắc mã số 1361" + (" (luôn thêm hậu tố .1)" if self.ck_suffix.isChecked() else "")}
+        return {"mode": "custom", "rules": {}, "always_suffix": False,
+                "ruleset": copy.deepcopy(self.custom.current_ruleset()), "policy": self.custom.policy(),
+                "label": f"Mẫu “{self.custom.ruleset.get('name', '')}”"}
+
     def apply(self):
         if self.busy_check():
             return
@@ -354,7 +365,7 @@ class RenamePanel(QWidget):
                 self, "Xác nhận đổi tên",
                 f"Đổi tên {fmt(len(todo))} file theo {self._rule_name()}?\n\n"
                 "Chỉ đổi tên, không sửa nội dung (chữ ký số còn nguyên); không ghi đè file nào.\n"
-                "Có thể hoàn tác bằng nút HOÀN TÁC (UNDO).") != QMessageBox.Yes:
+                "Có thể hoàn tác bằng nút HOÀN TÁC.") != QMessageBox.Yes:
             return
         self.preview.release()
         QApplication.setOverrideCursor(Qt.WaitCursor)

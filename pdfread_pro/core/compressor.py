@@ -481,6 +481,9 @@ def compress_file(src: str, dst: str, limit_kb: int, backup: bool = False, threa
         if len(data) >= r.before:
             r.status, r.message = ST_NO_GAIN, STATUS_TEXT[ST_NO_GAIN]
             return r
+        with pikepdf.open(io.BytesIO(data)) as chk:          # kết quả phải mở lại được và đủ số trang mới được ghi
+            if len(chk.pages) != r.pages:
+                raise ValueError(f"file nén sai số trang ({len(chk.pages)} ≠ {r.pages}) – giữ nguyên bản gốc")
         os.makedirs(os.path.dirname(dst) or ".", exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(suffix=".tmp", dir=os.path.dirname(dst) or ".")
         with os.fdopen(fd, "wb") as fh:

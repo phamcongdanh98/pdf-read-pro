@@ -62,9 +62,9 @@ class ReportPanel(QWidget):
         self.cb_sign.currentIndexChanged.connect(self.refresh)
         r.addWidget(self.cb_sign)
         r.addStretch(1)
-        self.btn_fix = button("✏ Chuẩn Hoá Tên Thư Mục", "warning", self.fix_folders, size="sm",
+        self.btn_fix = button("✏ Chuẩn hoá tên thư mục", "warning", self.fix_folders, size="sm",
                               tip="Đổi tên các thư mục hồ sơ sai chuẩn theo tên gợi ý (VD 056123456789_TranVanThai)")
-        self.btn_undo = button("↶ Hoàn Tác Đổi Tên", "light", self.undo_folders, size="sm")
+        self.btn_undo = button("↶ Hoàn tác đổi tên", "light", self.undo_folders, size="sm")
         self.btn_undo.setEnabled(False)
         self.ck_adv = QCheckBox("Kèm báo cáo nâng cao")
         self.ck_adv.setToolTip("Thêm các trang: Chi tiết từng file · Thống kê theo loại giấy tờ · Vấn đề cần xử lý")
@@ -440,7 +440,7 @@ class ReportPanel(QWidget):
         self.btn_excel.setEnabled(has)
         n = sum(1 for d in self.rep.dossiers if d.suggestion) if self.rep else 0
         self.btn_fix.setEnabled(n > 0)
-        self.btn_fix.setText(f"✏ Chuẩn Hoá Tên Thư Mục ({n})" if n else "✏ Chuẩn Hoá Tên Thư Mục")
+        self.btn_fix.setText(f"✏ Chuẩn hoá tên thư mục ({n})" if n else "✏ Chuẩn hoá tên thư mục")
         self.btn_open.setEnabled(False)
 
     def export(self):
